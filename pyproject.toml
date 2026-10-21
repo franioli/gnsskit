@@ -1,6 +1,6 @@
 [project]
 name = "gnsskit"
-version = "0.1.0"
+version = "0.2.0"
 description = "RTKLIB-based GNSS post-processing toolkit: configuration, runner, .pos readers, trajectories and network adjustment"
 readme = "README.md"
 license = "MIT"
