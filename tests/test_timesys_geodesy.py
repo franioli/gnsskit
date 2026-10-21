@@ -24,6 +24,13 @@ def test_ecef_to_llh_matches_pyproj() -> None:
     assert h == pytest.approx(h_p, abs=1e-4)
 
 
+def test_ellipsoids_differ_by_about_a_tenth_of_a_millimetre() -> None:
+    d = geodesy.llh_to_ecef(46.3, 9.8, 2300.0) - geodesy.llh_to_ecef(46.3, 9.8, 2300.0, geodesy.WGS84)
+    assert 1e-5 < np.linalg.norm(d) < 3e-4
+    lat, lon, h = geodesy.ecef_to_llh(*geodesy.llh_to_ecef(46.3, 9.8, 2300.0, geodesy.WGS84), ellipsoid=geodesy.WGS84)
+    assert (lat, lon, h) == pytest.approx((46.3, 9.8, 2300.0), abs=1e-9)
+
+
 def test_llh_round_trip() -> None:
     xyz = geodesy.llh_to_ecef(45.1, 10.8, 62.6)
     assert np.allclose(geodesy.ecef_to_llh(*xyz), (45.1, 10.8, 62.6), atol=1e-9)

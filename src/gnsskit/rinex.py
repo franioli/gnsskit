@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .geodesy import ecef_to_llh
+from .geodesy import GRS80, Ellipsoid, ecef_to_llh
 
 
 def rinex_span(obs: Path | str) -> tuple[pd.Timestamp, pd.Timestamp]:
@@ -45,13 +45,14 @@ def rinex_span(obs: Path | str) -> tuple[pd.Timestamp, pd.Timestamp]:
     return first, last
 
 
-def header_llh(obs: Path | str) -> tuple[float, float, float]:
-    """Antenna position from the RINEX header, as WGS84 lat, lon and ellipsoidal height.
+def header_llh(obs: Path | str, ellipsoid: Ellipsoid = GRS80) -> tuple[float, float, float]:
+    """Antenna position from the RINEX header, as geodetic lat, lon and ellipsoidal height.
 
     Uses `APPROX POSITION XYZ` plus the vertical `ANTENNA: DELTA H/E/N`, if present.
 
     Args:
         obs: RINEX observation file.
+        ellipsoid: Reference ellipsoid of the conversion.
 
     Returns:
         (lat [deg], lon [deg], height [m]).
@@ -70,7 +71,7 @@ def header_llh(obs: Path | str) -> tuple[float, float, float]:
                 break
     if xyz is None or xyz == (0.0, 0.0, 0.0):
         raise ValueError(f"no valid APPROX POSITION XYZ in {obs}")
-    lat, lon, h = ecef_to_llh(*xyz)
+    lat, lon, h = ecef_to_llh(*xyz, ellipsoid=ellipsoid)
     return float(lat), float(lon), float(h) + dh
 
 

@@ -276,20 +276,22 @@ def ecef_table(adj: Adjustment) -> pd.DataFrame:
 
 
 def _ecef_to_utm(epsg: int) -> Callable[[np.ndarray], np.ndarray]:
-    """Function ECEF (WGS84) -> (E, N, ellipsoidal height) of the UTM zone `epsg`."""
+    """Function ECEF -> (E, N, ellipsoidal height) of the UTM zone `epsg`."""
     to_utm = Transformer.from_crs("EPSG:4978", f"EPSG:{epsg}", always_xy=True)
     return lambda xyz: np.array(to_utm.transform(*xyz))
 
 
 def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
-    """UTM coordinates (WGS84, ellipsoidal height) with propagated standard deviations.
+    """UTM coordinates (ellipsoidal height) with propagated standard deviations.
 
     The covariance is propagated as C_utm = J C J^T, with J = d(E, N, h) / d(X, Y, Z)
     computed by central differences. Fixed points are listed with zero standard deviation.
+    The input ECEF coordinates are treated as WGS84, which equals ETRF2000 / RDN2008 within
+    the accuracy of GNSS; for those frames pass their UTM code (e.g. 7791 for RDN2008 UTM 32N).
 
     Args:
         adj: Result of `adjust_network`.
-        utm_epsg: EPSG code of the UTM zone (32632 = UTM 32N).
+        utm_epsg: EPSG code of the UTM zone (32632 = WGS84 UTM 32N, 7791 = RDN2008 UTM 32N).
 
     Returns:
         DataFrame with point, E, N, h_ell, sd_E, sd_N, sd_h [m]; unknown points first.
@@ -317,11 +319,11 @@ def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
 def coordinate_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
     """All adjusted points (fixed ones last): ECEF, geographic and UTM, with standard deviations.
 
-    Geographic and UTM coordinates are WGS84 (ellipsoidal height).
+    Geographic coordinates are on GRS80 (ellipsoidal height), UTM coordinates in `utm_epsg`.
 
     Args:
         adj: Result of `adjust_network`.
-        utm_epsg: EPSG code of the UTM zone (32632 = UTM 32N).
+        utm_epsg: EPSG code of the UTM zone (32632 = WGS84 UTM 32N, 7791 = RDN2008 UTM 32N).
 
     Returns:
         DataFrame indexed by point, with the ECEF, geographic and UTM columns.
