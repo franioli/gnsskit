@@ -2,3 +2,6 @@ __pycache__/
 .venv/
 dist/
 .pytest_cache/
+example/network/baselines/
+example/_tmp
+*output/
