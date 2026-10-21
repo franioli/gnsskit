@@ -1,0 +1,35 @@
+[project]
+name = "gnsskit"
+version = "0.1.0"
+description = "RTKLIB-based GNSS post-processing toolkit: configuration, runner, .pos readers, trajectories and network adjustment"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Francesco Ioli", email = "francesco.ioli@polimi.it" }]
+keywords = ["gnss", "gps", "rtklib", "ppk", "surveying", "least-squares"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Programming Language :: Python :: 3",
+    "Typing :: Typed",
+]
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas>=2"]
+
+[project.optional-dependencies]
+network = ["scipy", "pyproj"]
+
+[project.urls]
+Repository = "https://github.com/franioli/gnsskit"
+Issues = "https://github.com/franioli/gnsskit/issues"
+
+[dependency-groups]
+dev = ["pytest", "scipy", "pyproj"]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
