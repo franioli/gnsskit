@@ -24,9 +24,11 @@ position, and writes `output/reach_m2.pos` (all epochs) and `output/reach_m2_pos
 | `reach_m2.26o` | Emlid Reach M2 observations, RINEX 3.03, GPS, GLONASS, Galileo, QZSS and BeiDou. L1 + L2 (E5b for Galileo, B2I for BeiDou). Antenna type and height not in the header. **Rover** |
 | `reach_m2.26p` | Broadcast navigation messages (all systems) recorded by the Reach M2, RINEX 3.03 |
 
-Both observation files are cropped to the Reach session (08:26 to 13:20 GPST) and **decimated from
-1 s to 30 s** to keep the example small (the raw files are 160 MB and 52 MB).
-`prepare_data.py RAW_DIR` repeats this from the raw files with `gnsskit.crop_rinex`.
+Both observation files are cropped to the same window (08:26:00 to 13:20:00 GPST, the span they share)
+and **decimated from 1 s to 30 s** to keep the example small (the raw files are 160 MB and 52 MB).
+`prepare_data.py RAW_DIR` repeats this from the raw files. It uses RTKLIB `convbin` if it is on
+your PATH, which writes its own RINEX header and drops QZSS (not used here), and otherwise the
+Python function `gnsskit.crop_rinex`.
 
 The SONP navigation files are not part of the example: the Reach navigation file is used instead.
 
@@ -46,11 +48,11 @@ No antenna calibration file is used. The SONP antenna is not in `igs20.atx`, and
 
 ## Result
 
-About 83 % of the epochs are fixed, the final epoch is fixed (ratio 7.0, 12 satellites) with a
+About 83 % of the epochs are fixed, the final epoch is fixed (ratio 6.7, 12 satellites) with a
 formal standard deviation below 3 mm. Reach M2 position:
 
 ```
-lat 46.279077742   lon 9.780507778   h 2302.574 m  (WGS84 ellipsoidal)
+lat 46.279077745   lon 9.780507766   h 2302.570 m  (WGS84 ellipsoidal)
 ```
 
 The same data processed with Emlid Studio gave h = 2302.622 m, with horizontal differences of

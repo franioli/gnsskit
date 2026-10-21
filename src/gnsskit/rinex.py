@@ -99,6 +99,8 @@ def _convbin_crop(
     with src.open() as f:
         version = f.readline()[:9].strip()
     cmd = [exe, "-r", "rinex", "-v", version, "-od", "-os"]  # keep Doppler and SNR
+    if end is not None:
+        end += pd.Timedelta(seconds=1)  # convbin excludes the epoch at -te, and truncates it
     for flag, t in (("-ts", start), ("-te", end)):
         if t is not None:
             cmd += [flag, t.strftime("%Y/%m/%d"), t.strftime("%H:%M:%S")]
@@ -127,7 +129,9 @@ def crop_rinex(
 
     The pure-Python path drops event records without a timestamp, updates the `INTERVAL`,
     `TIME OF FIRST OBS` and `TIME OF LAST OBS` header lines and copies the rest of the
-    header unchanged. RTKLIB `convbin` writes its own header instead.
+    header unchanged. RTKLIB `convbin` writes its own header instead, drops QZSS, and
+    excludes the epoch at `end`; it is run with `end` + 1 s, so with data above 1 Hz and no
+    `interval` it may keep epochs up to 1 s after `end`.
 
     Args:
         src: Input RINEX 3 observation file.

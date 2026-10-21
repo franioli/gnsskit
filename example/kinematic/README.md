@@ -27,12 +27,14 @@ It then compares the photo positions with those stored by DJI in the MRK file.
 | `drone.obs` | Mavic 3E observations (`*_PPKOBS.obs`, RINEX 3.05): GPS, GLONASS, Galileo and BeiDou, L1 + L2 (E5b, B2I). **Rover** |
 | `drone.nav` | Broadcast navigation messages of the drone (`*_PPKNAV.nav`) |
 | `drone.mrk` | Photo events (`*_Timestamp.MRK`): number, GPS week and time of week, camera offsets, DJI position |
-| `reach_m2.26o` | Reach M2 observations, 1 s, cropped to 11:10 to 11:38 GPST. **Base** |
+| `reach_m2.26o` | Reach M2 observations, 1 s, cropped to the time span of the flight. **Base** |
 | `reach_m2.26p` | Navigation messages recorded by the Reach M2 |
 
 The drone logs at 5 Hz. The example uses **1 Hz** to keep the files small (the raw file is 23 MB); the
 photo positions are then linear interpolations between epochs a second apart. For the final
-products use the full 5 Hz data. `prepare_data.py RAW_DIR` repeats the reduction from the raw files.
+products use the full 5 Hz data. `prepare_data.py RAW_DIR` repeats the reduction from the raw files: the
+drone and the base are cropped to the span of the flight, with RTKLIB `convbin` if it is on your PATH
+(it rewrites the RINEX header and drops QZSS) and otherwise with `gnsskit.crop_rinex`.
 
 ## Processing choices
 
@@ -50,7 +52,7 @@ in the MRK file, but they are not applied here.
 
 ## Result
 
-1136 of 1160 epochs (97.9 %) are fixed, the others are float. The median standard deviation of the fixed
+1139 of 1160 epochs (98.2 %) are fixed, the others are float. The median standard deviation of the fixed
 epochs is 3 mm (north), 2 mm (east), 9 mm (up).
 
 The photo positions differ from the DJI ones by a nearly constant vector (mean E -0.17 m,
