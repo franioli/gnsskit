@@ -213,6 +213,9 @@ class RtkConfig:
     def updated(self, **changes: Any) -> RtkConfig:
         """Copy with some fields changed.
 
+        Raw keys in `extra` (e.g. loaded by `from_file`) that map to a changed field are dropped,
+        so the new value wins over them.
+
         Args:
             **changes: Field names and new values.
 
@@ -222,7 +225,13 @@ class RtkConfig:
         Raises:
             ValueError: If a value is not allowed for its field.
         """
-        return replace(self, **changes)
+        keys: set[str] = set()
+        for f in fields(self):
+            if f.name in changes:
+                key = f.metadata["key"]
+                keys.update([key] if isinstance(key, str) else key)
+        extra = {k: v for k, v in self.extra.items() if k not in keys}
+        return replace(self, **changes, extra=extra)
 
     def with_options(self, options: Mapping[str, object]) -> RtkConfig:
         """Copy with raw RTKLIB keys set (they override the fields).
@@ -251,8 +260,10 @@ class RtkConfig:
         Returns:
             The new config.
         """
-        cfg = replace(self, base_postype="llh", base_pos=(lat, lon, h))
-        return cfg if antenna_h is None else replace(cfg, base_antdel=(0.0, 0.0, antenna_h))
+        changes: dict[str, Any] = {"base_postype": "llh", "base_pos": (lat, lon, h)}
+        if antenna_h is not None:
+            changes["base_antdel"] = (0.0, 0.0, antenna_h)
+        return self.updated(**changes)
 
     @property
     def has_base_position(self) -> bool:

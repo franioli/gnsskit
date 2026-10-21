@@ -34,7 +34,8 @@ def test_from_file_and_overrides(tmp_path: Path) -> None:
     only = RtkConfig.from_file(f, RtkConfig.empty())
     assert only.options.keys() == {"pos1-elmask", "foo-bar"}
     assert cfg.with_options({"pos1-elmask": 5}).options["pos1-elmask"] == "5"
-    assert cfg.updated(elmask=20).options["pos1-elmask"] == "10"  # extra overrides fields
+    assert cfg.updated(elmask=20).options["pos1-elmask"] == "20"  # a changed field wins
+    assert cfg.updated(posmode="kinematic").options["pos1-elmask"] == "10"  # others are kept
 
 
 def test_base_and_presets() -> None:
@@ -43,6 +44,13 @@ def test_base_and_presets() -> None:
     assert cfg.options["ant2-postype"] == "llh" and cfg.options["ant2-antdelu"] == "1.5"
     kin = RtkConfig.kinematic().options
     assert kin["pos1-posmode"] == "kinematic" and kin["misc-timeinterp"] == "on"
+
+
+def test_with_base_llh_replaces_base_from_file(tmp_path: Path) -> None:
+    f = tmp_path / "a.conf"
+    f.write_text("ant2-postype=rinexhead\nant2-pos1=1\nant2-pos2=2\nant2-pos3=3\n")
+    opts = RtkConfig.from_file(f).with_base_llh(46.0, 9.0, 100.0).options
+    assert opts["ant2-postype"] == "llh" and opts["ant2-pos1"] == "46.0" and opts["ant2-pos3"] == "100.0"
 
 
 def test_write(tmp_path: Path) -> None:
