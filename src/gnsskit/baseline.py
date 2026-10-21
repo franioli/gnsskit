@@ -41,10 +41,19 @@ class BaselineResult:
 
     @property
     def length(self) -> float:
+        """3D baseline length [m]."""
         return float(np.linalg.norm(self.dxyz))
 
     def is_good(self, min_ratio: float = 3.0, min_sats: int = 6) -> bool:
-        """Fixed solution with enough satellites and a sufficient ratio."""
+        """Whether the solution is fixed, with enough satellites and a sufficient ratio.
+
+        Args:
+            min_ratio: Minimum ambiguity validation ratio.
+            min_sats: Minimum number of satellites used.
+
+        Returns:
+            True if Q is 1 (fixed), ratio >= `min_ratio` and ns >= `min_sats`.
+        """
         return self.q == 1 and self.ratio >= min_ratio and self.ns >= min_sats
 
 
@@ -62,7 +71,23 @@ def _cov_from_sd(row: Mapping[str, float]) -> np.ndarray:
 def extract_baseline(
     pos_file: Path | str, rover: str, base: str, session: str = ""
 ) -> BaselineResult | None:
-    """Final-epoch baseline from an xyz .pos file; None if the file has no solution."""
+    """Final-epoch baseline from an xyz .pos file.
+
+    The vector is the last solution minus the base position in the `% ref pos` header, so the
+    file needs `out-solformat=xyz` and `out-outhead=on`.
+
+    Args:
+        pos_file: RTKLIB .pos file.
+        rover: Rover point name.
+        base: Base point name.
+        session: Session label stored in the result.
+
+    Returns:
+        The baseline, or None if the file has no solution epoch.
+
+    Raises:
+        ValueError: If the file is not in xyz format or has no `% ref pos` header line.
+    """
     pos = read_pos(pos_file)
     if pos.attrs["format"] != "xyz":
         raise ValueError(f"{pos_file}: need out-solformat=xyz to extract a baseline")
@@ -98,13 +123,45 @@ def process_baseline(
     session: str = "",
     exe: str = "rnx2rtkp",
 ) -> BaselineResult | None:
-    """Run rnx2rtkp for one baseline (times in GPST), keep the .pos, extract the result."""
+    """Run rnx2rtkp for one baseline, keep the .pos file and extract the result.
+
+    Args:
+        rover: Rover point name.
+        base: Base point name.
+        rover_obs: Rover RINEX observation file.
+        base_obs: Base RINEX observation file.
+        nav: Navigation, precise orbit and clock files (see `run_rnx2rtkp`).
+        config: RTKLIB options; needs `solformat="xyz"` and the base position.
+        out: Output .pos file, kept on disk.
+        start: Processing start time, GPST.
+        end: Processing end time, GPST.
+        tint: Processing interval [s]. None for every epoch.
+        session: Session label stored in the result.
+        exe: rnx2rtkp executable name or path.
+
+    Returns:
+        The baseline, or None if rnx2rtkp produced no solution.
+
+    Raises:
+        FileNotFoundError: If the executable is not found.
+        RuntimeError: If rnx2rtkp exits with a non-zero code.
+        ValueError: If the .pos file is not in xyz format.
+    """
     run_rnx2rtkp(rover_obs, base_obs, nav, config, out, start=start, end=end, tint=tint, exe=exe)
     return extract_baseline(out, rover, base, session)
 
 
 def baselines_to_df(results: Sequence[BaselineResult]) -> pd.DataFrame:
-    """One row per baseline: vector, covariance (cov_xx..cov_zz), quality, source file."""
+    """Tabulate baselines, one row per baseline.
+
+    Args:
+        results: Baselines to tabulate.
+
+    Returns:
+        DataFrame with columns session, base, rover, epoch, dx, dy, dz, the covariance terms
+        cov_xx, cov_xy, cov_xz, cov_yy, cov_yz, cov_zz [m^2], length, Q, ns, ratio and
+        pos_file (empty string if unknown).
+    """
     rows = [
         {
             "session": b.session,
@@ -127,7 +184,14 @@ def baselines_to_df(results: Sequence[BaselineResult]) -> pd.DataFrame:
 
 
 def df_to_baselines(df: pd.DataFrame) -> list[BaselineResult]:
-    """Inverse of `baselines_to_df`."""
+    """Inverse of `baselines_to_df`.
+
+    Args:
+        df: Table with the columns written by `baselines_to_df`.
+
+    Returns:
+        One `BaselineResult` per row.
+    """
     results = []
     for r in df.itertuples(index=False):
         cov = np.zeros((3, 3))
@@ -151,7 +215,15 @@ def df_to_baselines(df: pd.DataFrame) -> list[BaselineResult]:
     return results
 
 def write_baselines(results: Sequence[BaselineResult], path: Path | str) -> Path:
-    """Save the baselines as CSV (see `baselines_to_df`)."""
+    """Save the baselines as CSV (see `baselines_to_df`).
+
+    Args:
+        results: Baselines to save.
+        path: Output CSV file; parent directories are created.
+
+    Returns:
+        The output path.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     baselines_to_df(results).to_csv(path, index=False)
@@ -159,7 +231,14 @@ def write_baselines(results: Sequence[BaselineResult], path: Path | str) -> Path
 
 
 def read_baselines(path: Path | str) -> list[BaselineResult]:
-    """Load baselines saved with `write_baselines`; point names stay strings (e.g. '063604')."""
+    """Load baselines saved with `write_baselines`.
+
+    Args:
+        path: CSV file.
+
+    Returns:
+        The baselines; point and session names stay strings (e.g. '063604').
+    """
     df = pd.read_csv(
         path, dtype={"session": str, "base": str, "rover": str}, keep_default_na=False
     )

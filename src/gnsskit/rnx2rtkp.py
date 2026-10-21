@@ -35,7 +35,17 @@ def install_hint() -> str:
 
 
 def find_rnx2rtkp(exe: str = "rnx2rtkp") -> str:
-    """Resolve the rnx2rtkp executable; raise FileNotFoundError with install hints."""
+    """Resolve the rnx2rtkp executable on PATH.
+
+    Args:
+        exe: Executable name or path.
+
+    Returns:
+        Absolute path of the executable.
+
+    Raises:
+        FileNotFoundError: If the executable is not found (the message has install hints).
+    """
     path = shutil.which(exe)
     if path is None:
         raise FileNotFoundError(f"'{exe}' not found on PATH. {install_hint()}")
@@ -43,6 +53,7 @@ def find_rnx2rtkp(exe: str = "rnx2rtkp") -> str:
 
 
 def _fmt_time(t: pd.Timestamp) -> list[str]:
+    """Timestamp as the [date, time] argument pair rnx2rtkp expects."""
     return [t.strftime("%Y/%m/%d"), t.strftime("%H:%M:%S")]
 
 
@@ -57,9 +68,23 @@ def build_command(
     exe: str = "rnx2rtkp",
     tint: float | None = None,
 ) -> list[str]:
-    """rnx2rtkp command line: rover, then base observations, then navigation files.
+    """Build the rnx2rtkp command line.
 
-    start/end are GPST, tint is the processing interval [s].
+    Argument order is rover observations, base observations, then navigation files.
+
+    Args:
+        conf: RTKLIB configuration file (`-k`).
+        rover: Rover RINEX observation file.
+        base: Base RINEX observation file.
+        nav: Navigation, precise orbit (SP3) and clock (CLK) files; rnx2rtkp tells them apart by file extension.
+        out: Output .pos file (`-o`).
+        start: Processing start time, GPST (`-ts`). None for the start of the data.
+        end: Processing end time, GPST (`-te`). None for the end of the data.
+        exe: rnx2rtkp executable.
+        tint: Processing interval [s] (`-ti`). None for every epoch.
+
+    Returns:
+        The command as a list of arguments.
     """
     cmd = [exe, "-k", str(conf)]
     if start is not None:
@@ -83,9 +108,29 @@ def run_rnx2rtkp(
     tint: float | None = None,
     exe: str = "rnx2rtkp",
 ) -> Path:
-    """Run rnx2rtkp and return the output .pos path.
+    """Run rnx2rtkp on a rover/base pair and return the output .pos path.
 
-    `tint` [s] decimates the processing, needed when rover and base sampling differ.
+    The config is written to a temporary file for the run. A zero exit code does not guarantee a solution: with e.g. missing precise products rnx2rtkp may write a .pos file with no epochs, which `read_pos` returns as an empty DataFrame.
+
+    Args:
+        rover: Rover RINEX observation file.
+        base: Base RINEX observation file.
+        nav: Navigation files (broadcast), and precise orbit (SP3) and clock (CLK) files when
+            `config.sateph` is "precise".
+        config: RTKLIB processing options.
+        out: Output .pos file; parent directories are created.
+        start: Processing start time, GPST. None for the start of the data.
+        end: Processing end time, GPST. None for the end of the data.
+        tint: Processing interval [s]; decimates the processing, needed when rover and base
+            sampling differ. None for every epoch.
+        exe: rnx2rtkp executable name or path.
+
+    Returns:
+        Path of the written .pos file (`out`).
+
+    Raises:
+        FileNotFoundError: If the executable is not found.
+        RuntimeError: If rnx2rtkp exits with a non-zero code.
     """
     exe = find_rnx2rtkp(exe)
     out = Path(out)
@@ -95,7 +140,9 @@ def run_rnx2rtkp(
         cmd = build_command(conf, rover, base, nav, out, start, end, exe, tint)
         proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise RuntimeError(f"rnx2rtkp failed ({proc.returncode}): {proc.stderr.strip()[-500:]}")
+        raise RuntimeError(
+            f"rnx2rtkp failed ({proc.returncode}): {proc.stderr.strip()[-500:]}"
+        )
     return out
 
 
@@ -109,7 +156,25 @@ def solve_static(
     exe: str = "rnx2rtkp",
     tint: float | None = None,
 ) -> pd.Series | None:
-    """Static solution over [start, end]: the last (cumulative) epoch of the forward filter."""
+    """Static solution over [start, end], run in a temporary directory.
+
+    Args:
+        rover: Rover RINEX observation file.
+        base: Base RINEX observation file.
+        nav: Navigation, precise orbit and clock files (see `run_rnx2rtkp`).
+        config: RTKLIB processing options.
+        start: Processing start time, GPST.
+        end: Processing end time, GPST.
+        exe: rnx2rtkp executable name or path.
+        tint: Processing interval [s]. None for every epoch.
+
+    Returns:
+        The last (cumulative) epoch of the forward filter as a row of the `read_pos` table, or None if there is no solution.
+
+    Raises:
+        FileNotFoundError: If the executable is not found.
+        RuntimeError: If rnx2rtkp exits with a non-zero code.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         out = run_rnx2rtkp(
             rover, base, nav, config, Path(tmp) / "out.pos",

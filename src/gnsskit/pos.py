@@ -61,12 +61,21 @@ def read_pos(
 ) -> pd.DataFrame:
     """Read one or more RTKLIB .pos files into a time-sorted DataFrame.
 
-    Columns `t` (GPST) and `gps_s` (seconds since the GPS epoch) are added. The coordinate
-    format is detected from the header: llh (lat, lon, h), xyz (x, y, z) or enu (e, n, u),
-    with the matching covariance columns (see POS_SD_COLS); it is stored in
-    `df.attrs["format"]`. Only `out-timeform=hms` is supported. UTC files are shifted to
-    GPST by `leap_s`. Mixing formats, or reading dms/JST files, raises ValueError. Files
-    with no solution rows are skipped (the result may be empty).
+    The coordinate format is detected from the header: llh (lat, lon, h), xyz (x, y, z) or
+    enu (e, n, u), with the matching covariance columns (see POS_SD_COLS), and stored in
+    `df.attrs["format"]`. Only `out-timeform=hms` is supported. Files with no solution rows
+    are skipped.
+
+    Args:
+        paths: One .pos file or a sequence of them.
+        leap_s: GPST - UTC [s], used to shift UTC files to GPST.
+
+    Returns:
+        DataFrame with the coordinates, Q, ns, the covariance columns, age and ratio, plus
+        `t` (GPST timestamp) and `gps_s` (seconds since the GPS epoch). May be empty.
+
+    Raises:
+        ValueError: If the files mix coordinate formats, or use dms or JST.
     """
     paths = [Path(paths)] if isinstance(paths, (str, Path)) else [Path(p) for p in paths]
     headers = {p: _pos_header(p) for p in paths}
@@ -98,7 +107,14 @@ def read_pos(
 
 
 def read_header(path: Path | str) -> list[str]:
-    """The `%` header lines of a .pos file (without line endings)."""
+    """The `%` header lines of a .pos file.
+
+    Args:
+        path: RTKLIB .pos file.
+
+    Returns:
+        The header lines, without line endings.
+    """
     return [
         ln.rstrip("\r\n")
         for ln in Path(path).read_text().splitlines()
@@ -107,7 +123,17 @@ def read_header(path: Path | str) -> list[str]:
 
 
 def read_ref_pos(path: Path | str) -> np.ndarray:
-    """Base position printed in the `% ref pos` header line of an xyz .pos file."""
+    """Base position printed in the `% ref pos` header line of an xyz .pos file.
+
+    Args:
+        path: RTKLIB .pos file written with `out-outhead=on`.
+
+    Returns:
+        (3,) ECEF coordinates [m]; for a baseline run these are the base coordinates.
+
+    Raises:
+        ValueError: If there is no `% ref pos` header line.
+    """
     with Path(path).open() as f:
         for line in f:
             if not line.startswith("%"):

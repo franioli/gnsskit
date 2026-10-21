@@ -11,10 +11,17 @@ from .timesys import GPS_EPOCH
 
 
 def interpolate(pos: pd.DataFrame, gps_s: np.ndarray) -> pd.DataFrame:
-    """Linear interpolation of the trajectory at the given times (seconds since GPS epoch).
+    """Linear interpolation of the trajectory at the given times.
 
     Q is the worse of the two neighbouring epochs, ns the smaller. Times outside the
     trajectory are not allowed.
+
+    Args:
+        pos: Trajectory from `read_pos`, with at least two epochs.
+        gps_s: Times to interpolate at, seconds since the GPS epoch.
+
+    Returns:
+        DataFrame in the format of `pos`, one row per requested time.
     """
     fmt = pos.attrs["format"]
     t = pos["gps_s"].to_numpy()
@@ -36,10 +43,20 @@ def interpolate(pos: pd.DataFrame, gps_s: np.ndarray) -> pd.DataFrame:
 def average(
     pos: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp, fix_only: bool = True
 ) -> dict[str, float | int | bool]:
-    """Mean position of the llh epochs in [start, end] with the scatter in E, N, U [m].
+    """Mean position of the llh epochs in [start, end] with the scatter in E, N, U.
 
-    Returns n_epochs, fix_pct, n_used and, if any epoch is used, fixed, lat, lon, h, sd_e,
-    sd_n, sd_u (sample standard deviations).
+    Args:
+        pos: llh trajectory from `read_pos`.
+        start: Window start, GPST.
+        end: Window end, GPST.
+        fix_only: Average the fixed epochs (Q == 1) only.
+
+    Returns:
+        Dict with n_epochs, fix_pct, n_used and, if any epoch is used, fixed, lat, lon, h
+        [deg, deg, m] and sd_e, sd_n, sd_u [m] (sample standard deviations).
+
+    Raises:
+        ValueError: If `pos` is not in llh format.
     """
     if pos.attrs.get("format") != "llh":
         raise ValueError("average needs a llh trajectory (out-solformat=llh)")

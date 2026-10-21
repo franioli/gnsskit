@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from gnsskit import read_pos, rinex_span
+from gnsskit import crop_rinex, read_pos, rinex_span
 from gnsskit.pos import read_header, read_ref_pos
 from gnsskit.rinex import header_llh
 
@@ -81,3 +81,21 @@ def test_header_llh(tmp_path: Path) -> None:
     assert lat == pytest.approx(46.28901474, abs=1e-8)
     assert lon == pytest.approx(9.61744532, abs=1e-8)
     assert h == pytest.approx(3220.0429 + 0.05, abs=1e-3)
+
+
+def test_crop_rinex_window_decimation_and_header(tmp_path: Path) -> None:
+    src = tmp_path / "in.26o"
+    header = (
+        f"{'1.000':>10}".ljust(60) + "INTERVAL\n"
+        + "  2026     9     6     8    48    40.0000000     GPS         TIME OF FIRST OBS\n"
+        + "".ljust(60) + "END OF HEADER\n"
+    )  # fmt: skip
+    epochs = "".join(f"> 2026  9  6  8 48 {s:2d}.0000000  0  1\nG01  1.0\n" for s in range(40, 51))
+    src.write_text(header + epochs + ">                              4  1\nCOMMENT\n")
+    dst = crop_rinex(
+        src, tmp_path / "out.26o", pd.Timestamp("2026-09-06 08:48:42"), pd.Timestamp("2026-09-06 08:48:48"), 2
+    )
+    assert rinex_span(dst) == (pd.Timestamp("2026-09-06 08:48:42"), pd.Timestamp("2026-09-06 08:48:48"))
+    text = dst.read_text()
+    assert text.count(">") == 4 and "COMMENT" not in text
+    assert "2.000" in text.split("INTERVAL")[0].splitlines()[0]

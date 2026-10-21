@@ -13,7 +13,18 @@ NAVSYS_BITS = {"G": 1, "S": 2, "R": 4, "E": 8, "J": 16, "C": 32, "I": 64}
 
 
 def navsys_mask(systems: str) -> int:
-    """RTKLIB navsys bitmask from system letters, e.g. 'GEC' -> 41."""
+    """RTKLIB navsys bitmask from system letters, e.g. 'GEC' -> 41.
+
+    Args:
+        systems: Letters from G (GPS), S (SBAS), R (GLONASS), E (Galileo), J (QZSS),
+            C (BeiDou), I (NavIC); case-insensitive.
+
+    Returns:
+        Sum of the bit values of the chosen systems.
+
+    Raises:
+        ValueError: If a letter is not a known system.
+    """
     try:
         return sum(NAVSYS_BITS[s] for s in set(systems.upper()))
     except KeyError as e:
@@ -150,6 +161,7 @@ class RtkConfig:
     extra: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Reject values outside a field's Literal choices."""
         hints = get_type_hints(type(self))
         for f in fields(self):
             allowed = _literal_values(hints[f.name])
@@ -161,19 +173,33 @@ class RtkConfig:
 
     @classmethod
     def empty(cls) -> RtkConfig:
-        """Config with every field unset: only what is added to it is written."""
+        """Config with every field unset: only what is added to it is written.
+
+        Returns:
+            The empty config.
+        """
         return cls(**{f.name: None for f in fields(cls) if f.name != "extra"})
 
     @classmethod
     def kinematic(cls) -> RtkConfig:
-        """Defaults for a moving rover: kinematic mode, forward+backward combined."""
+        """Defaults for a moving rover: kinematic mode, forward+backward combined.
+
+        Returns:
+            The config.
+        """
         return cls(posmode="kinematic", soltype="combined", timeinterp=True)
 
     @classmethod
     def from_file(cls, path: Path | str, defaults: RtkConfig | None = None) -> RtkConfig:
-        """Load an RTKLIB .conf file into `extra`, on top of `defaults` (`RtkConfig()` if None).
+        """Load an RTKLIB .conf file into `extra`, on top of `defaults`.
 
-        Pass `RtkConfig.empty()` to get only the keys of the file.
+        Args:
+            path: RTKLIB .conf file; `#` comments are ignored.
+            defaults: Config to start from. `RtkConfig()` if None; pass `RtkConfig.empty()`
+                to get only the keys of the file.
+
+        Returns:
+            The config; keys of the file override the same keys already in `defaults.extra`.
         """
         extra = {}
         for line in Path(path).read_text().splitlines():
@@ -185,27 +211,52 @@ class RtkConfig:
         return replace(base, extra={**base.extra, **extra})
 
     def updated(self, **changes: Any) -> RtkConfig:
-        """Copy with some fields changed."""
+        """Copy with some fields changed.
+
+        Args:
+            **changes: Field names and new values.
+
+        Returns:
+            The new config.
+
+        Raises:
+            ValueError: If a value is not allowed for its field.
+        """
         return replace(self, **changes)
 
     def with_options(self, options: Mapping[str, object]) -> RtkConfig:
-        """Copy with raw RTKLIB keys set (they override the fields)."""
+        """Copy with raw RTKLIB keys set (they override the fields).
+
+        Args:
+            options: RTKLIB key -> value, e.g. {"pos2-armode": "fix-and-hold"}.
+
+        Returns:
+            The new config.
+        """
         extra = {**self.extra, **{k: _render(v) for k, v in options.items()}}
         return replace(self, extra=extra)
 
     def with_base_llh(
         self, lat: float, lon: float, h: float, antenna_h: float | None = None
     ) -> RtkConfig:
-        """Copy with the base at lat/lon [deg], ellipsoidal height [m].
+        """Copy with the base at the given geodetic position.
 
-        `antenna_h` [m] is the vertical offset marker -> ARP; it has no effect with
-        `base_anttype="*"`, where RTKLIB reads it from the RINEX header.
+        Args:
+            lat: Latitude [deg].
+            lon: Longitude [deg].
+            h: Ellipsoidal height [m].
+            antenna_h: Vertical offset marker -> ARP [m]. It has no effect with
+                `base_anttype="*"`, where RTKLIB reads it from the RINEX header.
+
+        Returns:
+            The new config.
         """
         cfg = replace(self, base_postype="llh", base_pos=(lat, lon, h))
         return cfg if antenna_h is None else replace(cfg, base_antdel=(0.0, 0.0, antenna_h))
 
     @property
     def has_base_position(self) -> bool:
+        """Whether the base coordinates are set, via `base_pos` or raw `ant2-pos*` keys."""
         return self.base_pos is not None or all(
             k in self.extra for k in ("ant2-pos1", "ant2-pos2", "ant2-pos3")
         )
@@ -230,10 +281,18 @@ class RtkConfig:
         return {**opts, **self.extra}
 
     def to_text(self) -> str:
+        """The .conf file content, one `key =value` line per option."""
         return "".join(f"{k:<19}={v}\n" for k, v in self.options.items())
 
     def write(self, path: Path | str) -> Path:
-        """Write the .conf file (creating parent directories) and return its path."""
+        """Write the .conf file (creating parent directories).
+
+        Args:
+            path: Output file.
+
+        Returns:
+            The output path.
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.to_text())

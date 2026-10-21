@@ -68,14 +68,17 @@ class Adjustment:
 
     @property
     def n(self) -> int:
+        """Number of observations."""
         return self.y0.size
 
     @property
     def m(self) -> int:
+        """Number of estimated parameters."""
         return self.X_hat.size
 
     @property
     def dof(self) -> int:
+        """Degrees of freedom, n - m."""
         return self.n - self.m
 
     @property
@@ -162,7 +165,20 @@ def adjust_network(
 ) -> Adjustment:
     """Weighted least squares of the baseline vectors with the `fixed` points held.
 
-    `sigma_h`/`sigma_v` are used by the "apriori" model only.
+    Args:
+        baselines: Baselines (base -> rover vectors) forming the network.
+        fixed: Point name -> ECEF coordinates [m] of the held points.
+        stochastic: Baseline error model, "apriori" (ENU errors from `sigma_h`/`sigma_v`)
+            or "rtklib" (formal RTKLIB covariance); see the module docstring.
+        sigma_h: A-priori horizontal precision as (constant [m], ppm of the length).
+            Used by the "apriori" model only.
+        sigma_v: A-priori vertical precision, same form. "apriori" only.
+
+    Returns:
+        The adjustment, with parameters for the points not in `fixed`.
+
+    Raises:
+        ValueError: If `stochastic` is not "apriori" or "rtklib".
     """
     if stochastic not in ("apriori", "rtklib"):
         raise ValueError(f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}")
@@ -215,7 +231,15 @@ def adjust_network(
 
 
 def residual_table(adj: Adjustment) -> pd.DataFrame:
-    """Residuals [mm], redundancy number and normalised residual of every baseline."""
+    """Residuals, redundancy number and normalised residual of every baseline.
+
+    Args:
+        adj: Result of `adjust_network`.
+
+    Returns:
+        One row per baseline: session, base, rover, vx_mm, vy_mm, vz_mm [mm], redundancy,
+        tau (largest of the three normalised residuals) and outlier (tau > TAU_CRITICAL).
+    """
     tau = adj.tau.reshape(-1, 3).max(axis=1)
     return pd.DataFrame(
         {
@@ -233,7 +257,14 @@ def residual_table(adj: Adjustment) -> pd.DataFrame:
 
 
 def ecef_table(adj: Adjustment) -> pd.DataFrame:
-    """Adjusted ECEF coordinates and standard deviations [m] of the unknown points."""
+    """Adjusted ECEF coordinates and standard deviations of the unknown points.
+
+    Args:
+        adj: Result of `adjust_network`.
+
+    Returns:
+        DataFrame indexed by point with X, Y, Z, sd_X, sd_Y, sd_Z [m].
+    """
     sd = np.sqrt(np.diag(adj.Cxx))
     return pd.DataFrame(
         {
@@ -251,10 +282,17 @@ def _ecef_to_utm(epsg: int) -> Callable[[np.ndarray], np.ndarray]:
 
 
 def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
-    """UTM coordinates (WGS84, ellipsoidal height) with propagated standard deviations [m].
+    """UTM coordinates (WGS84, ellipsoidal height) with propagated standard deviations.
 
     The covariance is propagated as C_utm = J C J^T, with J = d(E, N, h) / d(X, Y, Z)
     computed by central differences. Fixed points are listed with zero standard deviation.
+
+    Args:
+        adj: Result of `adjust_network`.
+        utm_epsg: EPSG code of the UTM zone (32632 = UTM 32N).
+
+    Returns:
+        DataFrame with point, E, N, h_ell, sd_E, sd_N, sd_h [m]; unknown points first.
     """
     ecef_to_utm = _ecef_to_utm(utm_epsg)
     rows = []
@@ -280,6 +318,13 @@ def coordinate_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
     """All adjusted points (fixed ones last): ECEF, geographic and UTM, with standard deviations.
 
     Geographic and UTM coordinates are WGS84 (ellipsoidal height).
+
+    Args:
+        adj: Result of `adjust_network`.
+        utm_epsg: EPSG code of the UTM zone (32632 = UTM 32N).
+
+    Returns:
+        DataFrame indexed by point, with the ECEF, geographic and UTM columns.
     """
     utm = utm_table(adj, utm_epsg).set_index("point")
     ecef = ecef_table(adj)
