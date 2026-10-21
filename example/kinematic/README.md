@@ -2,14 +2,14 @@
 
 Post-processed kinematic positioning of the GNSS receiver of a DJI Mavic 3 Enterprise (RTK
 version) with respect to the Emlid Reach M2 that stood on the Ventina glacier. The base
-coordinates are the static solution of [../static](../static), so run that example first (its
-`output/reach_m2_position.csv` is already included). The flight was on 2026-09-06, 11:14 to 11:33 GPST,
+coordinates are the static solution of [../static](../static), so run that example first: it writes
+`../static/output/reach_m2_position.csv`, which this script reads (output folders are not in the repository). The flight was on 2026-09-06, 11:14 to 11:33 GPST,
 about 19 minutes with 286 photos. The drone stayed within 1.3 km of the base.
 
 ## Run
 
 ```bash
-python kinematic_processing.py
+python kinematic_processing.py   # after ../static/static_processing.py
 ```
 
 It runs `rnx2rtkp` (forward and backward filters combined), prints the quality of the trajectory,

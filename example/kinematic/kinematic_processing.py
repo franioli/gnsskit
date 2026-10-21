@@ -58,6 +58,8 @@ def read_mrk(path: Path) -> pd.DataFrame:
 
 def main() -> None:
     """Run rnx2rtkp, summarise the trajectory and compare it with the MRK positions."""
+    if not BASE_POSITION.exists():
+        raise SystemExit(f"{BASE_POSITION} not found: run ../static/static_processing.py first")
     base = pd.read_csv(BASE_POSITION).iloc[0]
     cfg = config.with_base_llh(base.lat, base.lon, base.height)
 
