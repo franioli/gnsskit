@@ -10,6 +10,7 @@ from .refsys import (
     WGS84,
     Ellipsoid,
     enu_diff,
+    gpst_to_local,
     utc_to_gpst,
 )
 from .rinex import (
@@ -45,6 +46,7 @@ __all__ = [
     "df_to_baselines",
     "enu_diff",
     "find_rinex_obs",
+    "gpst_to_local",
     "header_llh",
     "interpolate",
     "navsys_mask",

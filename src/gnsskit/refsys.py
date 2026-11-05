@@ -36,6 +36,23 @@ def utc_to_gpst(t: T, leap_s: int = GPST_UTC_OFFSET_S) -> T:
     return t + pd.Timedelta(seconds=leap_s)
 
 
+def gpst_to_local(t: T, tz: str = "Europe/Rome", leap_s: int = GPST_UTC_OFFSET_S) -> T:
+    """Convert GPST time(s) to local civil time, with daylight saving time.
+
+    Args:
+        t: Timestamp or Series of GPST times (naive).
+        tz: IANA time zone of the result.
+        leap_s: GPST - UTC [s].
+
+    Returns:
+        The local time(s) as naive datetimes, same type as `t`.
+    """
+    utc = t - pd.Timedelta(seconds=leap_s)
+    if isinstance(utc, pd.Series):
+        return utc.dt.tz_localize("UTC").dt.tz_convert(tz).dt.tz_localize(None)
+    return utc.tz_localize("UTC").tz_convert(tz).tz_localize(None)
+
+
 def gps_seconds(t: pd.Timestamp | pd.Series) -> float | pd.Series:
     """Seconds since the GPS epoch (1980-01-06), which avoids week roll-over problems.
 

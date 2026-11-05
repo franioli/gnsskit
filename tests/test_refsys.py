@@ -4,7 +4,7 @@ import pytest
 from pyproj import Transformer
 
 from gnsskit import refsys
-from gnsskit.refsys import GPS_EPOCH, gps_seconds, utc_to_gpst
+from gnsskit.refsys import GPS_EPOCH, gps_seconds, gpst_to_local, utc_to_gpst
 
 P063604 = (4428814.9484, 859166.7316, 4493637.0158)
 
@@ -51,3 +51,12 @@ def test_enu_diff_north() -> None:
     e, n, u = refsys.enu_diff(45.00001, 10.0, 0.0, 45.0, 10.0, 0.0)[0]
     assert n == pytest.approx(1.11, abs=0.01)
     assert e == 0 and u == 0
+
+
+def test_gpst_to_local_follows_daylight_saving() -> None:
+    winter, summer = pd.Timestamp("2026-11-04 09:50:02"), pd.Timestamp("2026-07-01 12:00:18")
+    assert gpst_to_local(winter) == pd.Timestamp("2026-11-04 10:49:44")  # CET, UTC+1
+    assert gpst_to_local(summer) == pd.Timestamp("2026-07-01 14:00:00")  # CEST, UTC+2
+    both = gpst_to_local(pd.Series([winter, summer]))
+    assert both.tolist() == [pd.Timestamp("2026-11-04 10:49:44"), pd.Timestamp("2026-07-01 14:00:00")]
+    assert utc_to_gpst(gpst_to_local(winter, "UTC", 0)) == winter + pd.Timedelta(seconds=18)
