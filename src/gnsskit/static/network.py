@@ -272,9 +272,7 @@ def adjust_network(
         ValueError: If `stochastic` is not "apriori" or "rtklib".
     """
     if stochastic not in ("apriori", "rtklib"):
-        raise ValueError(
-            f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}"
-        )
+        raise ValueError(f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}")
     fixed_xyz = {p: np.asarray(x, dtype=float) for p, x in fixed.items()}
     points = dict.fromkeys(p for bl in baselines for p in (bl.base, bl.rover))
     unknowns = [p for p in points if p not in fixed_xyz]
@@ -365,9 +363,7 @@ def _propagate(
     step: float = 1.0,
 ) -> np.ndarray:
     """Covariance of f(X) as J C J^T, with the Jacobian J by central differences [step m]."""
-    J = np.column_stack([
-        (f(X + step * e) - f(X - step * e)) / (2 * step) for e in np.eye(3)
-    ])
+    J = np.column_stack([(f(X + step * e) - f(X - step * e)) / (2 * step) for e in np.eye(3)])
     return J @ C @ J.T
 
 
@@ -395,9 +391,7 @@ def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
         rows.append([point, *ecef_to_utm(X), *sd])
     for point, X in adj.fixed.items():
         rows.append([point, *ecef_to_utm(X), 0.0, 0.0, 0.0])
-    return pd.DataFrame(
-        rows, columns=["point", "E", "N", "h_ell", "sd_E", "sd_N", "sd_h"]
-    )
+    return pd.DataFrame(rows, columns=["point", "E", "N", "h_ell", "sd_E", "sd_N", "sd_h"])
 
 
 def coordinate_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:

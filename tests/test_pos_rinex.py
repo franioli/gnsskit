@@ -29,7 +29,9 @@ def test_utc_file_is_shifted(tmp_path: Path) -> None:
 def test_xyz_format_and_ref_pos() -> None:
     df = read_pos(DATA / "xyz_static.pos")
     assert df.attrs["format"] == "xyz" and {"x", "sdxy"} <= set(df.columns)
-    assert np.allclose(read_ref_pos(DATA / "xyz_static.pos"), [4428814.9484, 859166.7316, 4493637.0158])
+    assert np.allclose(
+        read_ref_pos(DATA / "xyz_static.pos"), [4428814.9484, 859166.7316, 4493637.0158]
+    )
     assert read_header(DATA / "xyz_static.pos")[0].startswith("% program")
 
 
@@ -63,7 +65,10 @@ def test_rinex_span_skips_event_records(tmp_path: Path) -> None:
         "> 2026 09 06 08 48 40.5000000  3  1\n"
         "> 2026 09 06 08 48 41.5000000  0  1\n"
     )
-    assert rinex_span(f) == (pd.Timestamp("2026-09-06 08:48:40"), pd.Timestamp("2026-09-06 08:48:41.5"))
+    assert rinex_span(f) == (
+        pd.Timestamp("2026-09-06 08:48:40"),
+        pd.Timestamp("2026-09-06 08:48:41.5"),
+    )
     empty = tmp_path / "e.26O"
     empty.write_text("header only\n")
     with pytest.raises(ValueError):
@@ -94,10 +99,17 @@ def test_trim_rinex_window_decimation_and_header(tmp_path: Path) -> None:
     epochs = "".join(f"> 2026  9  6  8 48 {s:2d}.0000000  0  1\nG01  1.0\n" for s in range(40, 51))
     src.write_text(header + epochs + ">                              4  1\nCOMMENT\n")
     dst = trim_rinex(
-        src, tmp_path / "out.26o", pd.Timestamp("2026-09-06 08:48:42"), pd.Timestamp("2026-09-06 08:48:48"), 2,
+        src,
+        tmp_path / "out.26o",
+        pd.Timestamp("2026-09-06 08:48:42"),
+        pd.Timestamp("2026-09-06 08:48:48"),
+        2,
         marker="A2",
     )
-    assert rinex_span(dst) == (pd.Timestamp("2026-09-06 08:48:42"), pd.Timestamp("2026-09-06 08:48:48"))
+    assert rinex_span(dst) == (
+        pd.Timestamp("2026-09-06 08:48:42"),
+        pd.Timestamp("2026-09-06 08:48:48"),
+    )
     text = dst.read_text()
     assert text.count(">") == 4 and "COMMENT" not in text
     assert "A2".ljust(60) + "MARKER NAME" in text and "OLD" not in text

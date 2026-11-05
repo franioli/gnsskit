@@ -23,7 +23,10 @@ def test_pos_covariance_restores_signs() -> None:
 def test_extract_baseline_takes_last_epoch() -> None:
     b = extract_baseline(DATA / "xyz_static.pos", "1005", "063604", "S1")
     assert b is not None and (b.q, b.ns, b.ratio) == (1, 11, 3.6)
-    assert np.allclose(b.dxyz, [4428458.8882 - 4428814.9484, 857020.7700 - 859166.7316, 4494395.6355 - 4493637.0158])
+    assert np.allclose(
+        b.dxyz,
+        [4428458.8882 - 4428814.9484, 857020.7700 - 859166.7316, 4494395.6355 - 4493637.0158],
+    )
     assert b.is_good() and b.cov[0, 0] == pytest.approx(0.0017**2)
 
 

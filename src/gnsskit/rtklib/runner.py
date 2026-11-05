@@ -139,7 +139,5 @@ def run_rnx2rtkp(
         cmd = build_command(conf, rover, base, nav, out, start, end, exe, tint)
         proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"rnx2rtkp failed ({proc.returncode}): {proc.stderr.strip()[-500:]}"
-        )
+        raise RuntimeError(f"rnx2rtkp failed ({proc.returncode}): {proc.stderr.strip()[-500:]}")
     return out

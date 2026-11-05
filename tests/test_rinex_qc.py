@@ -31,7 +31,9 @@ def test_read_visibility(rnx: Path) -> None:
 def test_obs_summary(rnx: Path) -> None:
     s = obs_summary(rnx)
     assert s["n_epochs"] == 4 and s["duration_s"] == 6 and s["interval_s"] == 1
-    assert s["n_gaps"] == 1 and s["max_gap_s"] == 4 and s["first"] == pd.Timestamp("2026-11-04 09:00")
+    assert (
+        s["n_gaps"] == 1 and s["max_gap_s"] == 4 and s["first"] == pd.Timestamp("2026-11-04 09:00")
+    )
     assert s["n_sats"] == {"G": 1, "R": 1, "E": 1}
 
 

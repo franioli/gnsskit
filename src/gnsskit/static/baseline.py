@@ -228,9 +228,7 @@ def process_baseline(
         RuntimeError: If rnx2rtkp exits with a non-zero code.
         ValueError: If the .pos file is not in xyz format.
     """
-    run_rnx2rtkp(
-        rover_obs, base_obs, nav, config, out, start=start, end=end, tint=tint, exe=exe
-    )
+    run_rnx2rtkp(rover_obs, base_obs, nav, config, out, start=start, end=end, tint=tint, exe=exe)
     return extract_baseline(out, rover, base, session)
 
 
@@ -290,7 +288,5 @@ def read_baselines(path: Path | str) -> list[BaselineResult]:
     Returns:
         The baselines; point and session names stay strings (e.g. '063604').
     """
-    df = pd.read_csv(
-        path, dtype={"session": str, "base": str, "rover": str}, keep_default_na=False
-    )
+    df = pd.read_csv(path, dtype={"session": str, "base": str, "rover": str}, keep_default_na=False)
     return df_to_baselines(df)

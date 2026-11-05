@@ -65,7 +65,9 @@ def test_matches_scipy_least_squares_on_whitened_residuals() -> None:
     bl = _baselines(noise=3e-3, seed=1)
     adj = adjust_network(bl, {"A": TRUE["A"]})
     L = np.linalg.cholesky(np.linalg.inv(adj.Q))
-    res = least_squares(lambda x: L.T @ (adj.y0 - adj.b - adj.A @ x), adj.X_hat + 0.5, xtol=1e-14, ftol=1e-14)
+    res = least_squares(
+        lambda x: L.T @ (adj.y0 - adj.b - adj.A @ x), adj.X_hat + 0.5, xtol=1e-14, ftol=1e-14
+    )
     assert np.allclose(res.x, adj.X_hat, atol=1e-6)
 
 

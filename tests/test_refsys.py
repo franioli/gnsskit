@@ -18,7 +18,9 @@ def test_time_helpers() -> None:
 
 def test_ecef_to_llh_matches_pyproj() -> None:
     lat, lon, h = refsys.ecef_to_llh(*P063604)
-    lon_p, lat_p, h_p = Transformer.from_crs("EPSG:4978", "EPSG:4979", always_xy=True).transform(*P063604)
+    lon_p, lat_p, h_p = Transformer.from_crs("EPSG:4978", "EPSG:4979", always_xy=True).transform(
+        *P063604
+    )
     assert lat == pytest.approx(lat_p, abs=1e-9)
     assert lon == pytest.approx(lon_p, abs=1e-9)
     assert h == pytest.approx(h_p, abs=1e-4)
@@ -27,7 +29,9 @@ def test_ecef_to_llh_matches_pyproj() -> None:
 def test_ellipsoids_differ_by_about_a_tenth_of_a_millimetre() -> None:
     d = refsys.llh_to_ecef(46.3, 9.8, 2300.0) - refsys.llh_to_ecef(46.3, 9.8, 2300.0, refsys.WGS84)
     assert 1e-5 < np.linalg.norm(d) < 3e-4
-    lat, lon, h = refsys.ecef_to_llh(*refsys.llh_to_ecef(46.3, 9.8, 2300.0, refsys.WGS84), ellipsoid=refsys.WGS84)
+    lat, lon, h = refsys.ecef_to_llh(
+        *refsys.llh_to_ecef(46.3, 9.8, 2300.0, refsys.WGS84), ellipsoid=refsys.WGS84
+    )
     assert (lat, lon, h) == pytest.approx((46.3, 9.8, 2300.0), abs=1e-9)
 
 

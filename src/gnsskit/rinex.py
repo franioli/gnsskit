@@ -26,16 +26,12 @@ SYSTEMS = "GRECJSI"  # RINEX satellite system letters
 def _epoch_time(line: str) -> pd.Timestamp:
     """Timestamp of a RINEX 3 epoch record (the text after `>`)."""
     y, mo, d, h, mi, s = line.split()[:6]
-    return pd.Timestamp(int(y), int(mo), int(d), int(h), int(mi)) + pd.Timedelta(
-        seconds=float(s)
-    )
+    return pd.Timestamp(int(y), int(mo), int(d), int(h), int(mi)) + pd.Timedelta(seconds=float(s))
 
 
 def _header_time(t: pd.Timestamp) -> str:
     sec = t.second + t.microsecond / 1e6
-    return (
-        f"{t.year:6d}{t.month:6d}{t.day:6d}{t.hour:6d}{t.minute:6d}{sec:13.7f}     GPS"
-    )
+    return f"{t.year:6d}{t.month:6d}{t.day:6d}{t.hour:6d}{t.minute:6d}{sec:13.7f}     GPS"
 
 
 # =============================================================================
@@ -74,9 +70,7 @@ def rinex_span(obs: Path | str) -> tuple[pd.Timestamp, pd.Timestamp]:
     return first, last
 
 
-def header_llh(
-    obs: Path | str, ellipsoid: Ellipsoid = GRS80
-) -> tuple[float, float, float]:
+def header_llh(obs: Path | str, ellipsoid: Ellipsoid = GRS80) -> tuple[float, float, float]:
     """Antenna position from the RINEX header, as geodetic lat, lon and ellipsoidal height.
 
     Uses `APPROX POSITION XYZ` plus the vertical `ANTENNA: DELTA H/E/N`, if present.
@@ -329,9 +323,7 @@ def plot_visibility(
         import matplotlib.dates as mdates
         from matplotlib.figure import Figure
     except ImportError as e:  # pragma: no cover
-        raise ImportError(
-            "plot_visibility needs matplotlib: pip install 'gnsskit[plot]'"
-        ) from e
+        raise ImportError("plot_visibility needs matplotlib: pip install 'gnsskit[plot]'") from e
 
     colors = {"G": "tab:blue", "R": "tab:red", "E": "tab:green", "C": "tab:orange",
               "J": "tab:purple", "S": "tab:gray", "I": "tab:brown"}  # fmt: skip
@@ -345,11 +337,7 @@ def plot_visibility(
             ax.plot(t, [i] * len(t), "|", ms=3, color=colors[sat[0]])
         ax.set_yticks(range(len(sats)), sats, fontsize=5)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-        span = (
-            f"{vis.t.min():%H:%M:%S} - {vis.t.max():%H:%M:%S}"
-            if len(vis)
-            else "no data"
-        )
+        span = f"{vis.t.min():%H:%M:%S} - {vis.t.max():%H:%M:%S}" if len(vis) else "no data"
         ax.set_title(
             f"{Path(path).name} [{vis.attrs['marker']}]  {span}  ({len(sats)} sats)",
             fontsize=9,

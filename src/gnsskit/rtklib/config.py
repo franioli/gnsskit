@@ -37,9 +37,7 @@ def navsys_mask(systems: str) -> int:
 PosMode = Literal["single", "dgps", "kinematic", "static", "static-start", "fixed"]
 Frequency = Literal["l1", "l1+l2", "l1+l2+l5", "l1+l2+l5+l6"]
 SolType = Literal["forward", "backward", "combined", "combined-nophasereset"]
-IonoOpt = Literal[
-    "off", "brdc", "sbas", "dual-freq", "est-stec", "ionex-tec", "qzs-brdc"
-]
+IonoOpt = Literal["off", "brdc", "sbas", "dual-freq", "est-stec", "ionex-tec", "qzs-brdc"]
 TropOpt = Literal["off", "saas", "sbas", "est-ztd", "est-ztdgrad"]
 SatEph = Literal["brdc", "precise", "brdc+sbas", "brdc+ssrapc", "brdc+ssrcom"]
 ArMode = Literal["off", "continuous", "instantaneous", "fix-and-hold"]

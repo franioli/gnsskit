@@ -34,9 +34,7 @@ def main(raw: Path) -> None:
     start, end = rinex_span(drone_obs)
     print(f"common window: {start} -> {end} GPST")
     trim_rinex(base_obs, out / "reach_m2.26o", start, end, use_convbin=True)
-    trim_rinex(
-        drone_obs, out / "drone.obs", start, end, DRONE_INTERVAL, use_convbin=True
-    )
+    trim_rinex(drone_obs, out / "drone.obs", start, end, DRONE_INTERVAL, use_convbin=True)
     shutil.copy(reach / "Reach_raw_20260906082522.26P", out / "reach_m2.26p")
     shutil.copy(flight / f"{FLIGHT}_PPKNAV.nav", out / "drone.nav")
     shutil.copy(flight / f"{FLIGHT}_Timestamp.MRK", out / "drone.mrk")

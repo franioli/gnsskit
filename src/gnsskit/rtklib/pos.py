@@ -115,11 +115,7 @@ def read_header(path: Path | str) -> list[str]:
     Returns:
         The header lines, without line endings.
     """
-    return [
-        ln.rstrip("\r\n")
-        for ln in Path(path).read_text().splitlines()
-        if ln.startswith("%")
-    ]
+    return [ln.rstrip("\r\n") for ln in Path(path).read_text().splitlines() if ln.startswith("%")]
 
 
 def read_ref_pos(path: Path | str) -> np.ndarray:
@@ -143,9 +139,7 @@ def read_ref_pos(path: Path | str) -> np.ndarray:
     raise ValueError(f"{path}: no '% ref pos' header line (needs out-outhead=on)")
 
 
-def pos_covariance(
-    row: pd.Series | Mapping[str, float], fmt: str = "xyz"
-) -> np.ndarray:
+def pos_covariance(row: pd.Series | Mapping[str, float], fmt: str = "xyz") -> np.ndarray:
     """3x3 covariance of one .pos solution epoch from its standard-deviation columns.
 
     RTKLIB prints each off-diagonal term as sign(cov) * sqrt(|cov|), so it is squared back

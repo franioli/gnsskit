@@ -50,7 +50,11 @@ def test_with_base_llh_replaces_base_from_file(tmp_path: Path) -> None:
     f = tmp_path / "a.conf"
     f.write_text("ant2-postype=rinexhead\nant2-pos1=1\nant2-pos2=2\nant2-pos3=3\n")
     opts = RtkConfig.from_file(f).with_base_llh(46.0, 9.0, 100.0).options
-    assert opts["ant2-postype"] == "llh" and opts["ant2-pos1"] == "46.0" and opts["ant2-pos3"] == "100.0"
+    assert (
+        opts["ant2-postype"] == "llh"
+        and opts["ant2-pos1"] == "46.0"
+        and opts["ant2-pos3"] == "100.0"
+    )
 
 
 def test_write(tmp_path: Path) -> None:

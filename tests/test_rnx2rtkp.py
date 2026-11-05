@@ -15,7 +15,9 @@ def test_build_command() -> None:
     cmd = build_command(Path("c"), Path("r"), Path("b"), [Path("n1")], Path("o"), t0, t1, tint=5)
     assert cmd == ["rnx2rtkp", "-k", "c", "-ts", "2026/09/06", "08:00:00", "-te", "2026/09/06",
                    "08:10:00", "-ti", "5", "-o", "o", "r", "b", "n1"]  # fmt: skip
-    assert not {"-ts", "-te", "-ti"} & set(build_command(Path("c"), Path("r"), Path("b"), [], Path("o")))
+    assert not {"-ts", "-te", "-ti"} & set(
+        build_command(Path("c"), Path("r"), Path("b"), [], Path("o"))
+    )
 
 
 def test_run_writes_conf_and_output(tmp_path: Path, fake_rnx2rtkp: str) -> None:
@@ -36,12 +38,16 @@ def test_options_are_keyword_only(tmp_path: Path) -> None:
 
 
 def test_solve_static_returns_last_epoch(fake_rnx2rtkp: str) -> None:
-    sol = solve_static(Path("r"), Path("b"), [], RtkConfig(), pd.Timestamp(0), pd.Timestamp(1), exe=fake_rnx2rtkp)
+    sol = solve_static(
+        Path("r"), Path("b"), [], RtkConfig(), pd.Timestamp(0), pd.Timestamp(1), exe=fake_rnx2rtkp
+    )
     assert sol is not None and sol.Q == 1 and sol.h == 2000.0
 
 
 @pytest.mark.parametrize("platform, expected", [("linux", "make install"), ("win32", "PATH")])
-def test_missing_exe_gives_install_hint(monkeypatch: pytest.MonkeyPatch, platform: str, expected: str) -> None:
+def test_missing_exe_gives_install_hint(
+    monkeypatch: pytest.MonkeyPatch, platform: str, expected: str
+) -> None:
     monkeypatch.setattr(runner, "sys", SimpleNamespace(platform=platform))
     monkeypatch.setattr(runner.shutil, "which", lambda _: None)
     with pytest.raises(FileNotFoundError) as e:

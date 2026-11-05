@@ -24,9 +24,7 @@ OUT = HERE / "output"
 BASE_POSITION = HERE.parent / "static" / "output" / "reach_m2_position.csv"
 
 # MRK line: n  TOW[s]  [week]  dN,N dE,E dV,V  lat,Lat lon,Lon h,Ellh  sd sd sd  Q,Q
-MRK_LINE = re.compile(
-    r"(\d+)\s+([\d.]+)\s+\[(\d+)\].*?([\d.]+),Lat\s+([\d.]+),Lon\s+([\d.]+),Ellh"
-)
+MRK_LINE = re.compile(r"(\d+)\s+([\d.]+)\s+\[(\d+)\].*?([\d.]+),Lat\s+([\d.]+),Lon\s+([\d.]+),Ellh")
 
 config = RtkConfig.kinematic().updated(
     frequency="l1+l2",
@@ -55,9 +53,7 @@ def read_mrk(path: Path) -> pd.DataFrame:
 def main() -> None:
     """Run rnx2rtkp, summarise the trajectory and compare it with the MRK positions."""
     if not BASE_POSITION.exists():
-        raise SystemExit(
-            f"{BASE_POSITION} not found: run ../static/static_processing.py first"
-        )
+        raise SystemExit(f"{BASE_POSITION} not found: run ../static/static_processing.py first")
     base = pd.read_csv(BASE_POSITION).iloc[0]
     cfg = config.with_base_llh(base.lat, base.lon, base.height)
 
@@ -65,14 +61,10 @@ def main() -> None:
         DATA / "drone.obs", DATA / "reach_m2.26o", [DATA / "drone.nav", DATA / "reach_m2.26p"],
         cfg, OUT / "drone.pos",
     )  # fmt: skip
-    pos_file.with_name(f"{pos_file.stem}_events.pos").unlink(
-        missing_ok=True
-    )  # empty events
+    pos_file.with_name(f"{pos_file.stem}_events.pos").unlink(missing_ok=True)  # empty events
     pos = read_pos(pos_file)
     if pos.empty:
-        raise SystemExit(
-            "no solution: check the base position and the navigation files"
-        )
+        raise SystemExit("no solution: check the base position and the navigation files")
 
     print(f"epochs: {len(pos)}  {pos.t.iloc[0]} -> {pos.t.iloc[-1]} GPST")
     print(
@@ -86,19 +78,13 @@ def main() -> None:
 
     photos = read_mrk(DATA / "drone.mrk")
     inside = photos[(photos.t >= pos.t.iloc[0]) & (photos.t <= pos.t.iloc[-1])]
-    at_photos = interpolate(
-        pos, inside.t.map(lambda t: (t - GPS_EPOCH).total_seconds()).to_numpy()
-    )
+    at_photos = interpolate(pos, inside.t.map(lambda t: (t - GPS_EPOCH).total_seconds()).to_numpy())
     at_photos.insert(0, "photo", inside.photo.to_numpy())
-    at_photos.drop(columns=["age", "gps_s"]).to_csv(
-        OUT / "photo_positions.csv", index=False
-    )
+    at_photos.drop(columns=["age", "gps_s"]).to_csv(OUT / "photo_positions.csv", index=False)
     print(f"{len(at_photos)} photo positions -> {OUT / 'photo_positions.csv'}")
 
     # DJI stores its own positions, computed against another base: a constant offset is expected
-    d = enu_diff(
-        at_photos.lat, at_photos.lon, at_photos.h, inside.lat, inside.lon, inside.h
-    )
+    d = enu_diff(at_photos.lat, at_photos.lon, at_photos.h, inside.lat, inside.lon, inside.h)
     print("PPK - MRK [m]   mean / std")
     for name, col in zip("ENU", d.T, strict=True):
         print(f"  d{name}: {col.mean():+.3f} / {np.std(col):.3f}")
