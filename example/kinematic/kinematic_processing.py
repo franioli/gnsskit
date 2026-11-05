@@ -16,11 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from gnsskit import RtkConfig, run_rnx2rtkp
-from gnsskit.geodesy import enu_diff
-from gnsskit.pos import read_pos
-from gnsskit.timesys import GPS_EPOCH
-from gnsskit.trajectory import interpolate
+from gnsskit import GPS_EPOCH, RtkConfig, enu_diff, interpolate, read_pos, run_rnx2rtkp
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
@@ -59,7 +55,9 @@ def read_mrk(path: Path) -> pd.DataFrame:
 def main() -> None:
     """Run rnx2rtkp, summarise the trajectory and compare it with the MRK positions."""
     if not BASE_POSITION.exists():
-        raise SystemExit(f"{BASE_POSITION} not found: run ../static/static_processing.py first")
+        raise SystemExit(
+            f"{BASE_POSITION} not found: run ../static/static_processing.py first"
+        )
     base = pd.read_csv(BASE_POSITION).iloc[0]
     cfg = config.with_base_llh(base.lat, base.lon, base.height)
 

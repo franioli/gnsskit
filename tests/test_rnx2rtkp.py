@@ -5,8 +5,9 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from gnsskit import RtkConfig, rnx2rtkp, solve_static
-from gnsskit.rnx2rtkp import build_command, find_rnx2rtkp, run_rnx2rtkp
+from gnsskit import RtkConfig, solve_static
+from gnsskit.rtklib import runner
+from gnsskit.rtklib.runner import build_command, find_rnx2rtkp, run_rnx2rtkp
 
 
 def test_build_command() -> None:
@@ -41,11 +42,11 @@ def test_solve_static_returns_last_epoch(fake_rnx2rtkp: str) -> None:
 
 @pytest.mark.parametrize("platform, expected", [("linux", "make install"), ("win32", "PATH")])
 def test_missing_exe_gives_install_hint(monkeypatch: pytest.MonkeyPatch, platform: str, expected: str) -> None:
-    monkeypatch.setattr(rnx2rtkp, "sys", SimpleNamespace(platform=platform))
-    monkeypatch.setattr(rnx2rtkp.shutil, "which", lambda _: None)
+    monkeypatch.setattr(runner, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(runner.shutil, "which", lambda _: None)
     with pytest.raises(FileNotFoundError) as e:
         find_rnx2rtkp()
-    assert expected in str(e.value) and rnx2rtkp.RTKLIB_URL in str(e.value)
+    assert expected in str(e.value) and runner.RTKLIB_URL in str(e.value)
 
 
 @pytest.mark.skipif(shutil.which("rnx2rtkp") is None, reason="rnx2rtkp not installed")

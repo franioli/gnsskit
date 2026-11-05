@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 from scipy.optimize import least_squares
 
-from gnsskit.baseline import BaselineResult, read_baselines
-from gnsskit.network import adjust_network, coordinate_table, residual_table
+from gnsskit.static.baseline import BaselineResult, read_baselines
+from gnsskit.static.network import adjust_network, coordinate_table, residual_table
 
 from conftest import DATA
 

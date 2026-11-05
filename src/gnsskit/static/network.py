@@ -12,6 +12,10 @@ Stochastic model of a baseline (`stochastic` argument of `adjust_network`):
     "apriori": east/north/up errors, uncorrelated, with sd = a + b[ppm] * length;
                realistic for 10 min of static data.
     "rtklib":  formal covariance of the RTKLIB solution (optimistic, see MIN_VARIANCE).
+
+Layout: the stochastic model (Q) and the functional model (A, b) are built from the
+baselines, then `weighted_least_squares` solves the generic problem, which does not depend
+on GNSS and can be reused for other adjustments.
 """
 
 from __future__ import annotations
@@ -23,16 +27,20 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from ..refsys import ecef_to_enu_matrix, ecef_to_llh
 from .baseline import BaselineResult
-from .geodesy import ecef_to_enu_matrix, ecef_to_llh
 
 try:
     from pyproj import Transformer
     from scipy.stats import chi2
 except ImportError as e:  # pragma: no cover
     raise ImportError(
-        "gnsskit.network needs the 'network' extra: pip install 'gnsskit[network]'"
+        "gnsskit.static.network needs the 'network' extra: pip install 'gnsskit[network]'"
     ) from e
+
+# =============================================================================
+# Defaults and thresholds
+# =============================================================================
 
 # Default a-priori baseline precision as (constant [m], ppm of the length)
 SIGMA_H = (5e-3, 1.0)  # horizontal: 5 mm + 1 ppm
@@ -41,7 +49,74 @@ SIGMA_V = (10e-3, 2.0)  # vertical: 10 mm + 2 ppm
 # RTKLIB prints standard deviations rounded to 0.1 mm, which can make a 3x3 covariance
 # non-positive-definite; its eigenvalues are floored at this variance before inversion.
 MIN_VARIANCE = 1e-3**2  # m^2
+
 TAU_CRITICAL = 3.29  # two-sided 0.1 % level of a standard normal (Baarda data snooping)
+
+
+# =============================================================================
+# Generic weighted least squares
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class LsqSolution:
+    """Solution of y0 = A x + b + v, v ~ N(0, sigma^2 Q) (see the module docstring)."""
+
+    X_hat: np.ndarray  # (m,) estimated parameters
+    Y_hat: np.ndarray  # (n,) adjusted observations
+    v_hat: np.ndarray  # (n,) residuals
+    sigma_v_hat: float  # a-posteriori variance factor, expected ~1
+    Cxx: np.ndarray  # (m, m) covariance of the parameters
+    Cyy: np.ndarray  # (n, n) covariance of the adjusted observations
+    Cvv: np.ndarray  # (n, n) covariance of the residuals
+    R: np.ndarray  # (n, n) redundancy matrix, trace = n - m
+    tau: np.ndarray  # (n,) normalised residuals |v_i| / sd(v_i)
+
+
+def weighted_least_squares(
+    A: np.ndarray, Q: np.ndarray, y0: np.ndarray, b: np.ndarray | None = None
+) -> LsqSolution:
+    """Weighted least-squares solution of y0 = A x + b + v with observation covariance Q.
+
+    Args:
+        A: (n, m) design matrix, full column rank.
+        Q: (n, n) a-priori covariance of the observations (cofactor matrix).
+        y0: (n,) observations.
+        b: (n,) known terms. None for zeros.
+
+    Returns:
+        Estimates, their covariances scaled by the a-posteriori variance factor, the
+        redundancy matrix and the normalised residuals.
+    """
+    b = np.zeros_like(y0) if b is None else b
+    n, m = A.shape
+
+    Q_inv = np.linalg.inv(Q)  # weight matrix
+    N = A.T @ Q_inv @ A  # normal matrix
+    X_hat = np.linalg.solve(N, A.T @ Q_inv @ (y0 - b))
+    Y_hat = A @ X_hat + b
+    v_hat = y0 - Y_hat
+    sigma_v_hat = float(v_hat @ Q_inv @ v_hat / (n - m))
+
+    N_inv = np.linalg.inv(N)
+    Q_vv = Q - A @ N_inv @ A.T  # cofactor matrix of the residuals
+    Cvv = sigma_v_hat * Q_vv
+    return LsqSolution(
+        X_hat=X_hat,
+        Y_hat=Y_hat,
+        v_hat=v_hat,
+        sigma_v_hat=sigma_v_hat,
+        Cxx=sigma_v_hat * N_inv,
+        Cyy=sigma_v_hat * (A @ N_inv @ A.T),
+        Cvv=Cvv,
+        R=Q_vv @ Q_inv,
+        tau=np.abs(v_hat) / np.sqrt(np.maximum(np.diag(Cvv), 1e-30)),
+    )
+
+
+# =============================================================================
+# Network adjustment result
+# =============================================================================
 
 
 @dataclass(frozen=True)
@@ -89,7 +164,13 @@ class Adjustment:
     @property
     def sigma_v_hat_bounds(self) -> tuple[float, float]:
         """95 % acceptance interval of sigma_v_hat under the chi-square test."""
-        return chi2.ppf(0.025, self.dof) / self.dof, chi2.ppf(0.975, self.dof) / self.dof
+        lo, hi = chi2.ppf([0.025, 0.975], self.dof) / self.dof
+        return float(lo), float(hi)
+
+
+# =============================================================================
+# Stochastic model: covariance Q of the baselines
+# =============================================================================
 
 
 def _make_pd(cov: np.ndarray) -> np.ndarray:
@@ -121,7 +202,7 @@ def _observation_covariance(
     """Block-diagonal covariance Q of the observations, one 3x3 block per baseline."""
     # One east-north-up rotation, taken at the first fixed point, serves a small network
     lat0, lon0, _ = ecef_to_llh(*next(iter(fixed.values())))
-    R_enu = ecef_to_enu_matrix(lat0, lon0)
+    R_enu = ecef_to_enu_matrix(float(lat0), float(lon0))
 
     Q = np.zeros((3 * len(baselines),) * 2)
     for k, bl in enumerate(baselines):
@@ -131,6 +212,11 @@ def _observation_covariance(
             block = _make_pd(bl.cov)
         Q[3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = block
     return Q
+
+
+# =============================================================================
+# Functional model: design matrix A and known terms b
+# =============================================================================
 
 
 def _design_matrix(
@@ -143,17 +229,22 @@ def _design_matrix(
     A has +I (3x3) in the columns of the rover and -I in those of the base. When the rover
     or the base is a fixed point, its coordinates are moved to the known terms b.
     """
+    col = {p: 3 * j for j, p in enumerate(unknowns)}
     A = np.zeros((3 * len(baselines), 3 * len(unknowns)))
     b = np.zeros(3 * len(baselines))
     for k, bl in enumerate(baselines):
         rows = slice(3 * k, 3 * k + 3)
         for point, sign in ((bl.rover, +1), (bl.base, -1)):
-            if point in unknowns:
-                j = list(unknowns).index(point)
-                A[rows, 3 * j : 3 * j + 3] = sign * np.eye(3)
+            if point in col:
+                A[rows, col[point] : col[point] + 3] = sign * np.eye(3)
             else:
                 b[rows] += sign * fixed[point]
     return A, b
+
+
+# =============================================================================
+# Network adjustment
+# =============================================================================
 
 
 def adjust_network(
@@ -181,53 +272,41 @@ def adjust_network(
         ValueError: If `stochastic` is not "apriori" or "rtklib".
     """
     if stochastic not in ("apriori", "rtklib"):
-        raise ValueError(f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}")
-    fixed = {p: np.asarray(x, dtype=float) for p, x in fixed.items()}
+        raise ValueError(
+            f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}"
+        )
+    fixed_xyz = {p: np.asarray(x, dtype=float) for p, x in fixed.items()}
     points = dict.fromkeys(p for bl in baselines for p in (bl.base, bl.rover))
-    unknowns = [p for p in points if p not in fixed]
+    unknowns = [p for p in points if p not in fixed_xyz]
 
     y0 = np.concatenate([bl.dxyz for bl in baselines])
-    Q = _observation_covariance(baselines, fixed, stochastic, sigma_h, sigma_v)
-    A, b = _design_matrix(baselines, unknowns, fixed)
-    n, m = A.shape
-
-    Q_inv = np.linalg.inv(Q)  # weight matrix
-    N = A.T @ Q_inv @ A  # normal matrix
-    X_hat = np.linalg.solve(N, A.T @ Q_inv @ (y0 - b))  # estimated parameters
-    Y_hat = A @ X_hat + b  # adjusted observations
-    v_hat = y0 - Y_hat  # residuals
-    sigma_v_hat = float(v_hat @ Q_inv @ v_hat / (n - m))  # a-posteriori variance factor
-
-    N_inv = np.linalg.inv(N)
-    Cxx = sigma_v_hat * N_inv
-    Cyy = sigma_v_hat * (A @ N_inv @ A.T)
-    Cvv = sigma_v_hat * (Q - A @ N_inv @ A.T)
-    R = (Q - A @ N_inv @ A.T) @ Q_inv  # redundancy matrix
-    tau = np.abs(v_hat) / np.sqrt(np.maximum(np.diag(Cvv), 1e-30))  # normalised residuals
+    Q = _observation_covariance(baselines, fixed_xyz, stochastic, sigma_h, sigma_v)
+    A, b = _design_matrix(baselines, unknowns, fixed_xyz)
+    sol = weighted_least_squares(A, Q, y0, b)
 
     return Adjustment(
         unknowns=unknowns,
-        fixed=fixed,
+        fixed=fixed_xyz,
         baselines=list(baselines),
         y0=y0,
         b=b,
         A=A,
         Q=Q,
-        X_hat=X_hat,
-        Y_hat=Y_hat,
-        v_hat=v_hat,
-        sigma_v_hat=sigma_v_hat,
-        Cxx=Cxx,
-        Cyy=Cyy,
-        Cvv=Cvv,
-        R=R,
-        tau=tau,
+        X_hat=sol.X_hat,
+        Y_hat=sol.Y_hat,
+        v_hat=sol.v_hat,
+        sigma_v_hat=sol.sigma_v_hat,
+        Cxx=sol.Cxx,
+        Cyy=sol.Cyy,
+        Cvv=sol.Cvv,
+        R=sol.R,
+        tau=sol.tau,
     )
 
 
-# ------------------------------------------------------------------------------
-# Result tables
-# ------------------------------------------------------------------------------
+# =============================================================================
+# Result tables: residuals and coordinates
+# =============================================================================
 
 
 def residual_table(adj: Adjustment) -> pd.DataFrame:
@@ -241,19 +320,17 @@ def residual_table(adj: Adjustment) -> pd.DataFrame:
         tau (largest of the three normalised residuals) and outlier (tau > TAU_CRITICAL).
     """
     tau = adj.tau.reshape(-1, 3).max(axis=1)
-    return pd.DataFrame(
-        {
-            "session": [bl.session for bl in adj.baselines],
-            "base": [bl.base for bl in adj.baselines],
-            "rover": [bl.rover for bl in adj.baselines],
-            "vx_mm": adj.v_hat[0::3] * 1e3,
-            "vy_mm": adj.v_hat[1::3] * 1e3,
-            "vz_mm": adj.v_hat[2::3] * 1e3,
-            "redundancy": np.diag(adj.R).reshape(-1, 3).sum(axis=1),
-            "tau": tau,
-            "outlier": tau > TAU_CRITICAL,
-        }
-    )
+    return pd.DataFrame({
+        "session": [bl.session for bl in adj.baselines],
+        "base": [bl.base for bl in adj.baselines],
+        "rover": [bl.rover for bl in adj.baselines],
+        "vx_mm": adj.v_hat[0::3] * 1e3,
+        "vy_mm": adj.v_hat[1::3] * 1e3,
+        "vz_mm": adj.v_hat[2::3] * 1e3,
+        "redundancy": np.diag(adj.R).reshape(-1, 3).sum(axis=1),
+        "tau": tau,
+        "outlier": tau > TAU_CRITICAL,
+    })  # fmt: skip
 
 
 def ecef_table(adj: Adjustment) -> pd.DataFrame:
@@ -281,6 +358,19 @@ def _ecef_to_utm(epsg: int) -> Callable[[np.ndarray], np.ndarray]:
     return lambda xyz: np.array(to_utm.transform(*xyz))
 
 
+def _propagate(
+    f: Callable[[np.ndarray], np.ndarray],
+    X: np.ndarray,
+    C: np.ndarray,
+    step: float = 1.0,
+) -> np.ndarray:
+    """Covariance of f(X) as J C J^T, with the Jacobian J by central differences [step m]."""
+    J = np.column_stack([
+        (f(X + step * e) - f(X - step * e)) / (2 * step) for e in np.eye(3)
+    ])
+    return J @ C @ J.T
+
+
 def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
     """UTM coordinates (ellipsoidal height) with propagated standard deviations.
 
@@ -301,19 +391,13 @@ def utm_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:
     for j, point in enumerate(adj.unknowns):
         X = adj.X_hat[3 * j : 3 * j + 3]  # adjusted ECEF coordinates
         C = adj.Cxx[3 * j : 3 * j + 3, 3 * j : 3 * j + 3]  # their 3x3 covariance
-
-        east, north, h = ecef_to_utm(X)
-        step = 1.0
-        J = np.column_stack(
-            [(ecef_to_utm(X + step * e) - ecef_to_utm(X - step * e)) / (2 * step) for e in np.eye(3)]
-        )
-        sd_E, sd_N, sd_h = np.sqrt(np.diag(J @ C @ J.T))
-        rows.append([point, east, north, h, sd_E, sd_N, sd_h])
-
+        sd = np.sqrt(np.diag(_propagate(ecef_to_utm, X, C)))
+        rows.append([point, *ecef_to_utm(X), *sd])
     for point, X in adj.fixed.items():
-        east, north, h = ecef_to_utm(X)
-        rows.append([point, east, north, h, 0.0, 0.0, 0.0])
-    return pd.DataFrame(rows, columns=["point", "E", "N", "h_ell", "sd_E", "sd_N", "sd_h"])
+        rows.append([point, *ecef_to_utm(X), 0.0, 0.0, 0.0])
+    return pd.DataFrame(
+        rows, columns=["point", "E", "N", "h_ell", "sd_E", "sd_N", "sd_h"]
+    )
 
 
 def coordinate_table(adj: Adjustment, utm_epsg: int = 32632) -> pd.DataFrame:

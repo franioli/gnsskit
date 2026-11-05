@@ -1,10 +1,10 @@
-"""Crop and decimate the raw RINEX files into the small `data/` folder used by the example.
+"""Trim and decimate the raw RINEX files into the small `data/` folder used by the example.
 
 Usage:
     python prepare_data.py RAW_DIR
 
 RAW_DIR holds `sonp249g00.rnx/sonp249g00.26o` (SPIN3 SONP, 1 s) and
-`Reach_raw_20260906082522_RINEX_3_03/` (Emlid Reach M2, 1 s). Base and rover are cropped to
+`Reach_raw_20260906082522_RINEX_3_03/` (Emlid Reach M2, 1 s). Base and rover are trimmed to
 their common time span and decimated to 30 s, with RTKLIB `convbin` if it is on PATH and
 with the Python implementation otherwise.
 """
@@ -15,7 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from gnsskit import crop_rinex, rinex_span
+from gnsskit import rinex_span, trim_rinex
 
 HERE = Path(__file__).parent
 INTERVAL = 30.0  # s
@@ -33,8 +33,8 @@ def main(raw: Path) -> None:
     end = min(e for _, e in spans)
     print(f"common window: {start} -> {end} GPST")
 
-    crop_rinex(base, out / "sonp249g00.26o", start, end, INTERVAL, use_convbin=True)
-    crop_rinex(rover, out / "reach_m2.26o", start, end, INTERVAL, use_convbin=True)
+    trim_rinex(base, out / "sonp249g00.26o", start, end, INTERVAL, use_convbin=True)
+    trim_rinex(rover, out / "reach_m2.26o", start, end, INTERVAL, use_convbin=True)
     shutil.copy(reach / "Reach_raw_20260906082522.26P", out / "reach_m2.26p")
 
 

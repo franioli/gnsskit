@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from gnsskit import read_pos
-from gnsskit.trajectory import average, interpolate
+from gnsskit.kinematic import average, interpolate
 
 from conftest import llh_header, llh_line
 

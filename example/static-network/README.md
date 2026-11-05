@@ -9,7 +9,7 @@ Two 10-minute sessions give six baselines, which are then adjusted as a network.
 Run them in this order, from this folder, with `gnsskit` installed
 (`pip install -e '.[network]'` from the repository root).
 
-1. [newtork_baseline_computation.ipynb](newtork_baseline_computation.ipynb) runs RTKLIB
+1. [network_baseline_computation.ipynb](network_baseline_computation.ipynb) runs RTKLIB
    (`rnx2rtkp`) on each baseline of each session with precise orbits and clocks, and writes
    `output/baselines.csv` plus one `.pos` file per baseline.
 2. [network_adjustment.ipynb](network_adjustment.ipynb) reads the CSV and does a weighted

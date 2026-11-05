@@ -27,14 +27,14 @@ It then compares the photo positions with those stored by DJI in the MRK file.
 | `drone.obs` | Mavic 3E observations (`*_PPKOBS.obs`, RINEX 3.05): GPS, GLONASS, Galileo and BeiDou, L1 + L2 (E5b, B2I). **Rover** |
 | `drone.nav` | Broadcast navigation messages of the drone (`*_PPKNAV.nav`) |
 | `drone.mrk` | Photo events (`*_Timestamp.MRK`): number, GPS week and time of week, camera offsets, DJI position |
-| `reach_m2.26o` | Reach M2 observations, 1 s, cropped to the time span of the flight. **Base** |
+| `reach_m2.26o` | Reach M2 observations, 1 s, trimmed to the time span of the flight. **Base** |
 | `reach_m2.26p` | Navigation messages recorded by the Reach M2 |
 
 The drone logs at 5 Hz. The example uses **1 Hz** to keep the files small (the raw file is 23 MB); the
 photo positions are then linear interpolations between epochs a second apart. For the final
 products use the full 5 Hz data. `prepare_data.py RAW_DIR` repeats the reduction from the raw files: the
-drone and the base are cropped to the span of the flight, with RTKLIB `convbin` if it is on your PATH
-(it rewrites the RINEX header and drops QZSS) and otherwise with `gnsskit.crop_rinex`.
+drone and the base are trimmed to the span of the flight, with RTKLIB `convbin` if it is on your PATH
+(it rewrites the RINEX header and drops QZSS) and otherwise with `gnsskit.trim_rinex`.
 
 ## Processing choices
 

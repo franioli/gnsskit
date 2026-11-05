@@ -1,16 +1,56 @@
-"""Small geodetic helpers on a reference ellipsoid (numpy only).
+"""Reference systems: time (GPST, UTC) and space (ellipsoid, ECEF, geodetic, local ENU).
 
-The default is GRS80, the ellipsoid of ITRS, ETRS89/ETRF2000 and the Italian RDN2008. WGS84 has
-the same semi-major axis and a flattening that differs in the 11th digit: the two give the same
-coordinates to about 0.1 mm.
+The default ellipsoid is GRS80, the ellipsoid of ITRS, ETRS89/ETRF2000 and the Italian
+RDN2008. WGS84 has the same semi-major axis and a flattening that differs in the 11th digit:
+the two give the same coordinates to about 0.1 mm.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeVar
 
 import numpy as np
 import pandas as pd
+
+# =============================================================================
+# Time systems (GPST, UTC)
+# =============================================================================
+
+GPS_EPOCH = pd.Timestamp("1980-01-06")
+GPST_UTC_OFFSET_S = 18  # GPST - UTC leap seconds (valid since 2017)
+
+T = TypeVar("T", pd.Timestamp, pd.Series)
+
+
+def utc_to_gpst(t: T, leap_s: int = GPST_UTC_OFFSET_S) -> T:
+    """Shift UTC time(s) to GPST.
+
+    Args:
+        t: Timestamp or Series of UTC times.
+        leap_s: GPST - UTC [s].
+
+    Returns:
+        The shifted time(s), same type as `t`.
+    """
+    return t + pd.Timedelta(seconds=leap_s)
+
+
+def gps_seconds(t: pd.Timestamp | pd.Series) -> float | pd.Series:
+    """Seconds since the GPS epoch (1980-01-06), which avoids week roll-over problems.
+
+    Args:
+        t: Timestamp or Series of GPST times.
+
+    Returns:
+        Seconds as a float, or a Series of floats.
+    """
+    return (t - GPS_EPOCH) / pd.Timedelta(seconds=1)
+
+
+# =============================================================================
+# Reference ellipsoids
+# =============================================================================
 
 
 @dataclass(frozen=True)
@@ -31,6 +71,11 @@ GRS80 = Ellipsoid(6378137.0, 298.257222101)
 WGS84 = Ellipsoid(6378137.0, 298.257223563)
 
 ArrayLike = float | np.ndarray | pd.Series
+
+
+# =============================================================================
+# Global coordinates: geodetic <-> ECEF
+# =============================================================================
 
 
 def llh_to_ecef(
@@ -84,6 +129,11 @@ def ecef_to_llh(
         h = p / np.cos(lat) - n
         lat = np.arctan2(z, p * (1 - e2 * n / (n + h)))
     return np.degrees(lat), np.degrees(np.arctan2(y, x)), h
+
+
+# =============================================================================
+# Local frames: ENU rotation and small-difference offsets
+# =============================================================================
 
 
 def ecef_to_enu_matrix(lat: float, lon: float) -> np.ndarray:

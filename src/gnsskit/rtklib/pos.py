@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .timesys import GPST_UTC_OFFSET_S, gps_seconds, utc_to_gpst
+from ..refsys import GPST_UTC_OFFSET_S, gps_seconds, utc_to_gpst
 
 # .pos output formats (`out-solformat`). Column names for the coordinates and for the
 # 6 covariance terms (3 standard deviations + 3 covariances), as printed by RTKLIB.
@@ -141,3 +141,24 @@ def read_ref_pos(path: Path | str) -> np.ndarray:
             if line.startswith("% ref pos"):
                 return np.array(line.split(":", 1)[1].split(), dtype=float)
     raise ValueError(f"{path}: no '% ref pos' header line (needs out-outhead=on)")
+
+
+def pos_covariance(
+    row: pd.Series | Mapping[str, float], fmt: str = "xyz"
+) -> np.ndarray:
+    """3x3 covariance of one .pos solution epoch from its standard-deviation columns.
+
+    RTKLIB prints each off-diagonal term as sign(cov) * sqrt(|cov|), so it is squared back
+    here. The axes follow the coordinate columns of the format: X, Y, Z for xyz; N, E, U for
+    llh; E, N, U for enu.
+
+    Args:
+        row: One epoch of a `read_pos` table (any mapping with the `POS_SD_COLS[fmt]` keys).
+        fmt: .pos format, "xyz", "llh" or "enu".
+
+    Returns:
+        (3, 3) covariance [m^2].
+    """
+    s1, s2, s3, s12, s23, s31 = (float(row[c]) for c in POS_SD_COLS[fmt])
+    c12, c23, c31 = (np.sign(v) * v**2 for v in (s12, s23, s31))
+    return np.array([[s1**2, c12, c31], [c12, s2**2, c23], [c31, c23, s3**2]])

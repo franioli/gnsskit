@@ -1,7 +1,7 @@
 [project]
 name = "gnsskit"
-version = "0.2.0"
-description = "RTKLIB-based GNSS post-processing toolkit: configuration, runner, .pos readers, trajectories and network adjustment"
+version = "0.3.0"
+description = "RTKLIB-based GNSS post-processing toolkit: RINEX tools, RTKLIB wrappers, static baselines and network adjustment, kinematic trajectories"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -19,13 +19,14 @@ dependencies = ["numpy", "pandas>=2"]
 
 [project.optional-dependencies]
 network = ["scipy", "pyproj"]
+plot = ["matplotlib"]
 
 [project.urls]
 Repository = "https://github.com/franioli/gnsskit"
 Issues = "https://github.com/franioli/gnsskit/issues"
 
 [dependency-groups]
-dev = ["pytest", "scipy", "pyproj"]
+dev = ["pytest", "scipy", "pyproj", "matplotlib"]
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]

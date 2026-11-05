@@ -5,9 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .geodesy import enu_diff
-from .pos import POS_COORD_COLS, POS_SD_COLS
-from .timesys import GPS_EPOCH
+from ..refsys import GPS_EPOCH, enu_diff
+from ..rtklib.pos import POS_COORD_COLS, POS_SD_COLS
 
 
 def interpolate(pos: pd.DataFrame, gps_s: np.ndarray) -> pd.DataFrame:

@@ -12,8 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gnsskit import RtkConfig, rinex_span, run_rnx2rtkp
-from gnsskit.pos import read_pos
+from gnsskit import RtkConfig, read_pos, rinex_span, run_rnx2rtkp
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
@@ -44,7 +43,9 @@ def main() -> None:
         rover, base, [DATA / "reach_m2.26p"], config, OUT / "reach_m2.pos",
         start=start, end=end, tint=30,
     )  # fmt: skip
-    pos_file.with_name(f"{pos_file.stem}_events.pos").unlink(missing_ok=True)  # empty events
+    pos_file.with_name(f"{pos_file.stem}_events.pos").unlink(
+        missing_ok=True
+    )  # empty events
     pos = read_pos(pos_file)
     if pos.empty:
         raise SystemExit("no solution: check the navigation file and the time span")
@@ -53,8 +54,12 @@ def main() -> None:
     last = pos.iloc[-1]
     print(f"epochs: {len(pos)}, fixed: {fixed:.0f} %")
     print(f"final epoch: Q={last.Q}, ns={last.ns}, ratio={last.ratio:.1f}")
-    print(f"Reach M2: lat {last.lat:.9f}, lon {last.lon:.9f}, h {last.h:.4f} m (ellipsoidal)")
-    print(f"sd n/e/u: {last.sdn * 1e3:.1f} / {last.sde * 1e3:.1f} / {last.sdu * 1e3:.1f} mm")
+    print(
+        f"Reach M2: lat {last.lat:.9f}, lon {last.lon:.9f}, h {last.h:.4f} m (ellipsoidal)"
+    )
+    print(
+        f"sd n/e/u: {last.sdn * 1e3:.1f} / {last.sde * 1e3:.1f} / {last.sdu * 1e3:.1f} mm"
+    )
     if last.Q != 1:
         print("warning: the final solution is not fixed")
 

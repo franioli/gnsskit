@@ -24,11 +24,11 @@ position, and writes `output/reach_m2.pos` (all epochs) and `output/reach_m2_pos
 | `reach_m2.26o` | Emlid Reach M2 observations, RINEX 3.03, GPS, GLONASS, Galileo, QZSS and BeiDou. L1 + L2 (E5b for Galileo, B2I for BeiDou). Antenna type and height not in the header. **Rover** |
 | `reach_m2.26p` | Broadcast navigation messages (all systems) recorded by the Reach M2, RINEX 3.03 |
 
-Both observation files are cropped to the same window (08:26:00 to 13:20:00 GPST, the span they share)
+Both observation files are trimmed to the same window (08:26:00 to 13:20:00 GPST, the span they share)
 and **decimated from 1 s to 30 s** to keep the example small (the raw files are 160 MB and 52 MB).
 `prepare_data.py RAW_DIR` repeats this from the raw files. It uses RTKLIB `convbin` if it is on
 your PATH, which writes its own RINEX header and drops QZSS (not used here), and otherwise the
-Python function `gnsskit.crop_rinex`.
+Python function `gnsskit.trim_rinex`.
 
 The SONP navigation files are not part of the example: the Reach navigation file is used instead.
 
