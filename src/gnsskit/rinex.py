@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 from .refsys import GRS80, Ellipsoid, ecef_to_llh
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 SYSTEMS = "GRECJSI"  # RINEX satellite system letters
+OBS_SUFFIX = re.compile(r"\.(\d\d[oO]|obs)$")  # observation files: .26O, .26o, .obs
 
 
 # =============================================================================
@@ -302,6 +305,120 @@ def obs_summary(obs: Path | str, gap_factor: float = 1.5) -> dict[str, object]:
         "mean_sats": float(len(vis) / len(epochs)),
         "n_sats": vis.groupby(vis.sat.str[0]).sat.nunique().to_dict(),
     }
+
+
+def find_rinex_obs(paths: Sequence[Path | str]) -> list[Path]:
+    """RINEX observation files from a mix of files and folders.
+
+    Files are kept as given. A folder is replaced by the observation files directly inside it
+    (names ending in `.YYo`, `.YYO` or `.obs`, sorted by name; subfolders are not searched), so
+    navigation files next to them are ignored.
+
+    Args:
+        paths: Observation files and/or folders.
+
+    Returns:
+        The observation files, in the order of `paths`.
+    """
+    files: list[Path] = []
+    for p in map(Path, paths):
+        if p.is_dir():
+            files += sorted(f for f in p.iterdir() if OBS_SUFFIX.search(f.name))
+        else:
+            files.append(p)
+    return files
+
+
+def read_obs_types(obs: Path | str) -> dict[str, list[str]]:
+    """Observation codes of each satellite system, in file order (`SYS / # / OBS TYPES`).
+
+    Args:
+        obs: RINEX 3 observation file.
+
+    Returns:
+        {system letter: [codes]}, e.g. {"G": ["C1C", "L1C", "D1C", "S1C", ...]}.
+    """
+    types: dict[str, list[str]] = {}
+    system = ""
+    with Path(obs).open() as f:
+        for line in f:
+            if "END OF HEADER" in line:
+                break
+            if line[60:].startswith("SYS / # / OBS TYPES"):
+                if line[0] != " ":  # first line of a system; the others continue its list
+                    system = line[0]
+                    types[system] = []
+                types[system] += line[7:60].split()
+    return types
+
+
+def satellite_stats(obs: Path | str) -> pd.DataFrame:
+    """Tracking statistics of every satellite of a RINEX 3 observation file.
+
+    Args:
+        obs: RINEX 3 observation file.
+
+    Returns:
+        DataFrame indexed by satellite with first and last epoch tracked, `n_epochs` (epochs
+        tracked), `of_file` (n_epochs / epochs of the file) and `of_arc` (n_epochs / epochs
+        between its first and last, which is below 1 if the satellite was lost and regained).
+    """
+    vis = read_visibility(obs)
+    epochs = np.sort(vis.t.unique())
+    g = vis.groupby("sat").t
+    df = pd.DataFrame({"first": g.min(), "last": g.max(), "n_epochs": g.size()})
+    arc = np.searchsorted(epochs, df["last"].to_numpy(), "right") - np.searchsorted(
+        epochs, df["first"].to_numpy(), "left"
+    )
+    df["of_file"] = df.n_epochs / len(epochs)
+    df["of_arc"] = df.n_epochs / arc
+    return df
+
+
+def signal_stats(obs: Path | str) -> pd.DataFrame:
+    """Completeness and signal strength of every observation code of each system.
+
+    Args:
+        obs: RINEX 3 observation file.
+
+    Returns:
+        DataFrame indexed by (system, code) with `n_obs` (non-blank values),
+        `completeness` (n_obs / satellite records of that system: how often the satellite
+        has the code when it is tracked) and `mean_snr` (mean of the S codes in the unit of
+        the file, normally dB-Hz; NaN for the other codes).
+    """
+    types = read_obs_types(obs)
+    n_rec = dict.fromkeys(types, 0)
+    n_obs = {(s, c): 0 for s, codes in types.items() for c in codes}
+    snr = {k: 0.0 for k in n_obs if k[1][0] == "S"}
+    valid = False
+    with Path(obs).open() as f:
+        for line in f:
+            if "END OF HEADER" in line:
+                break
+        for line in f:
+            if line.startswith(">"):
+                valid = line[31:32] == "0"  # skip event records
+            elif valid and line[:1] in types:
+                s = line[0]
+                n_rec[s] += 1
+                for k, code in enumerate(types[s]):
+                    field = line[3 + 16 * k : 17 + 16 * k]
+                    if field.strip():
+                        n_obs[s, code] += 1
+                        if code[0] == "S":
+                            snr[s, code] += float(field)
+    rows = [
+        {
+            "system": s,
+            "code": c,
+            "n_obs": n,
+            "completeness": n / n_rec[s] if n_rec[s] else np.nan,
+            "mean_snr": snr[s, c] / n if (s, c) in snr and n else np.nan,
+        }
+        for (s, c), n in n_obs.items()
+    ]
+    return pd.DataFrame(rows).set_index(["system", "code"])
 
 
 def plot_visibility(

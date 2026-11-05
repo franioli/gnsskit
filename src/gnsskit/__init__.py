@@ -13,11 +13,14 @@ from .refsys import (
     utc_to_gpst,
 )
 from .rinex import (
+    find_rinex_obs,
     header_llh,
     obs_summary,
     plot_visibility,
     read_visibility,
     rinex_span,
+    satellite_stats,
+    signal_stats,
     trim_rinex,
 )
 from .rtklib import (
@@ -41,6 +44,7 @@ __all__ = [
     "baselines_to_df",
     "df_to_baselines",
     "enu_diff",
+    "find_rinex_obs",
     "header_llh",
     "interpolate",
     "navsys_mask",
@@ -53,6 +57,8 @@ __all__ = [
     "read_visibility",
     "rinex_span",
     "run_rnx2rtkp",
+    "satellite_stats",
+    "signal_stats",
     "solve_static",
     "trim_rinex",
     "utc_to_gpst",
