@@ -154,8 +154,11 @@ class RtkConfig:
     height: HeightType | None = _opt("out-height")
     geoid: GeoidModel | None = _opt("out-geoid")
     outstat: OutStat | None = _opt("out-outstat")
-    # "on": output only the final solution of a static run (one epoch)
+    # "on": write the single-point solution at epochs where the RTK solution fails (outage)
     outsingle: Literal["on", "off"] | None = _opt("out-outsingle", "off")
+    # static modes: "all" epochs (cumulative solution) or "single", only the final solution
+    # (one line, time-tagged at the first epoch of the processed span)
+    solstatic: Literal["all", "single"] | None = _opt("out-solstatic")
 
     # --- anything else, as raw RTKLIB keys ---
     extra: Mapping[str, str] = field(default_factory=dict)

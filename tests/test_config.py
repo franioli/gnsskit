@@ -60,3 +60,7 @@ def test_with_base_llh_replaces_base_from_file(tmp_path: Path) -> None:
 def test_write(tmp_path: Path) -> None:
     p = RtkConfig(elmask=12.0).write(tmp_path / "sub" / "x.conf")
     assert "pos1-elmask        =12.0\n" in p.read_text()
+
+
+def test_solstatic_writes_the_rtklib_key() -> None:
+    assert "out-solstatic      =single" in RtkConfig(solstatic="single").to_text()
