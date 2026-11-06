@@ -154,9 +154,8 @@ class RtkConfig:
     height: HeightType | None = _opt("out-height")
     geoid: GeoidModel | None = _opt("out-geoid")
     outstat: OutStat | None = _opt("out-outstat")
-    outsingle: str | None = _opt(
-        "out-outsingle", "off"
-    )  # "on" or "off" for single static solutions
+    # "on": output only the final solution of a static run (one epoch)
+    outsingle: Literal["on", "off"] | None = _opt("out-outsingle", "off")
 
     # --- anything else, as raw RTKLIB keys ---
     extra: Mapping[str, str] = field(default_factory=dict)
@@ -179,7 +178,8 @@ class RtkConfig:
         Returns:
             The empty config.
         """
-        return cls(**{f.name: None for f in fields(cls) if f.name != "extra"})
+        unset: dict[str, Any] = {f.name: None for f in fields(cls) if f.name != "extra"}
+        return cls(**unset)
 
     @classmethod
     def kinematic(cls) -> RtkConfig:

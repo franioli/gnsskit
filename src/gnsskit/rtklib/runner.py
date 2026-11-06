@@ -57,11 +57,11 @@ def _fmt_time(t: pd.Timestamp) -> list[str]:
 
 
 def build_command(
-    conf: Path,
-    rover: Path,
-    base: Path,
-    nav: Sequence[Path],
-    out: Path,
+    conf: Path | str,
+    rover: Path | str,
+    base: Path | str,
+    nav: Sequence[Path | str],
+    out: Path | str,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
     exe: str = "rnx2rtkp",
@@ -75,7 +75,8 @@ def build_command(
         conf: RTKLIB configuration file (`-k`).
         rover: Rover RINEX observation file.
         base: Base RINEX observation file.
-        nav: Navigation, precise orbit (SP3) and clock (CLK) files; rnx2rtkp tells them apart by file extension.
+        nav: Navigation, precise orbit (SP3) and clock (CLK) files; rnx2rtkp tells them
+            apart by file extension.
         out: Output .pos file (`-o`).
         start: Processing start time, GPST (`-ts`). None for the start of the data.
         end: Processing end time, GPST (`-te`). None for the end of the data.
@@ -96,11 +97,11 @@ def build_command(
 
 
 def run_rnx2rtkp(
-    rover: Path,
-    base: Path,
-    nav: Sequence[Path],
+    rover: Path | str,
+    base: Path | str,
+    nav: Sequence[Path | str],
     config: RtkConfig,
-    out: Path,
+    out: Path | str,
     *,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
@@ -109,7 +110,9 @@ def run_rnx2rtkp(
 ) -> Path:
     """Run rnx2rtkp on a rover/base pair and return the output .pos path.
 
-    The config is written to a temporary file for the run. A zero exit code does not guarantee a solution: with e.g. missing precise products rnx2rtkp may write a .pos file with no epochs, which `read_pos` returns as an empty DataFrame.
+    The config is written to a temporary file for the run. A zero exit code does not
+    guarantee a solution: with e.g. missing precise products rnx2rtkp may write a .pos file
+    with no epochs, which `read_pos` returns as an empty DataFrame.
 
     Args:
         rover: Rover RINEX observation file.
@@ -137,7 +140,7 @@ def run_rnx2rtkp(
     with tempfile.TemporaryDirectory() as tmp:
         conf = config.write(Path(tmp) / "rtk.conf")
         cmd = build_command(conf, rover, base, nav, out, start, end, exe, tint)
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"rnx2rtkp failed ({proc.returncode}): {proc.stderr.strip()[-500:]}")
     return out

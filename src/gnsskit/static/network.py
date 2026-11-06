@@ -31,7 +31,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from ..refsys import ecef_to_enu_matrix, ecef_to_llh
+from ..refsys import ENUFrame, ecef_to_llh
 from .baseline import BaselineResult
 
 try:
@@ -50,9 +50,7 @@ except ImportError as e:  # pragma: no cover
 SIGMA_H = (5e-3, 1.0)  # horizontal: 5 mm + 1 ppm
 SIGMA_V = (10e-3, 2.0)  # vertical: 10 mm + 2 ppm
 
-# Variance factor of the RTKLIB covariance for 5 s epochs. RTKLIB treats the epochs as
-# independent; with errors correlated as exp(-dt / T), the variance of the mean is too small
-# by (1 + rho) / (1 - rho) ~ 2 T / dt. T ~ 60 s (multipath at a static site), dt = 5 s -> 24.
+# Variance factor of the RTKLIB covariance for 5 s epochs. RTKLIB treats the epochs as independent; with errors correlated as exp(-dt / T), the variance of the mean is too small by (1 + rho) / (1 - rho) ~ 2 T / dt. T ~ 60 s (multipath at a static site), dt = 5 s -> 24.
 # For another interval use k_s ~ 2 * 60 / dt, e.g. 120 for 1 s, 8 for 15 s.
 K_S = 25.0
 
@@ -211,10 +209,13 @@ def _observation_covariance(
     sigma_v: tuple[float, float],
     k_s: float,
 ) -> np.ndarray:
-    """Block-diagonal covariance Q of the observations, one 3x3 block per baseline."""
+    """Block-diagonal ECEF covariance Q of the observations, one 3x3 block per baseline.
+
+    "apriori" blocks are built in east, north, up and rotated to ECEF; the RTKLIB blocks are
+    already ECEF and only made positive definite (and scaled by `k_s` for "rtklib_scaled").
+    """
     # One east-north-up rotation, taken at the first fixed point, serves a small network
-    lat0, lon0, _ = ecef_to_llh(*next(iter(fixed.values())))
-    R_enu = ecef_to_enu_matrix(float(lat0), float(lon0))
+    R_enu = ENUFrame.from_ecef(next(iter(fixed.values()))).rotation
 
     Q = np.zeros((3 * len(baselines),) * 2)
     for k, bl in enumerate(baselines):
@@ -261,7 +262,7 @@ def _design_matrix(
 
 def adjust_network(
     baselines: Sequence[BaselineResult],
-    fixed: Mapping[str, Sequence[float]],
+    fixed: Mapping[str, Sequence[float] | np.ndarray],
     stochastic: Literal["rtklib_scaled", "rtklib", "apriori"] = "rtklib_scaled",
     sigma_h: tuple[float, float] = SIGMA_H,
     sigma_v: tuple[float, float] = SIGMA_V,
@@ -278,11 +279,8 @@ def adjust_network(
     Args:
         baselines: Baselines (base -> rover vectors) forming the network.
         fixed: Point name -> ECEF coordinates [m] of the held points.
-        stochastic: Baseline error model: "rtklib_scaled" (RTKLIB covariance x `k_s`),
-            "rtklib" (formal RTKLIB covariance) or "apriori" (ENU errors from
-            `sigma_h`/`sigma_v`); see the module docstring.
-        sigma_h: A-priori horizontal precision as (constant [m], ppm of the length).
-            Used by the "apriori" model only.
+        stochastic: Baseline error model: "rtklib_scaled" (RTKLIB covariance x `k_s`), "rtklib" (formal RTKLIB covariance) or "apriori" (ENU errors from `sigma_h`/`sigma_v`); see the module docstring.
+        sigma_h: A-priori horizontal precision as (constant [m], ppm of the length). Used by the "apriori" model only.
         sigma_v: A-priori vertical precision, same form. "apriori" only.
         k_s: Variance factor of the RTKLIB covariance. "rtklib_scaled" only.
 

@@ -121,7 +121,7 @@ def _timestamp(value: Any) -> pd.Timestamp:
 
 def baseline_from_solution(
     sol: pd.Series | Mapping[str, Any],
-    base_xyz: np.ndarray,
+    base_xyz: Sequence[float] | np.ndarray,
     rover: str,
     base: str,
     session: str = "",
@@ -138,7 +138,9 @@ def baseline_from_solution(
         pos_file: Source .pos file, stored for reference.
 
     Returns:
-        The baseline rover - base with the covariance of the rover solution.
+        The baseline rover - base. Its covariance is the formal covariance of the rover
+        solution, which is also that of the baseline because RTKLIB holds the base fixed;
+        it is optimistic (see `gnsskit.static.network.K_S`).
     """
     xyz = np.array([sol[c] for c in POS_COORD_COLS["xyz"]], dtype=float)
     return BaselineResult(
@@ -193,11 +195,11 @@ def extract_baseline(
 def process_baseline(
     rover: str,
     base: str,
-    rover_obs: Path,
-    base_obs: Path,
-    nav: Sequence[Path],
+    rover_obs: Path | str,
+    base_obs: Path | str,
+    nav: Sequence[Path | str],
     config: RtkConfig,
-    out: Path,
+    out: Path | str,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
     tint: float | None = None,
@@ -212,7 +214,8 @@ def process_baseline(
         rover_obs: Rover RINEX observation file.
         base_obs: Base RINEX observation file.
         nav: Navigation, precise orbit and clock files (see `run_rnx2rtkp`).
-        config: RTKLIB options; needs `solformat="xyz"` and the base position.
+        config: RTKLIB options; needs `solformat="xyz"`, `outhead=True` and a base position
+            (e.g. `base_postype="rinexhead"`), which is written in the `% ref pos` header.
         out: Output .pos file, kept on disk.
         start: Processing start time, GPST.
         end: Processing end time, GPST.

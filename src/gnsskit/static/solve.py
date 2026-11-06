@@ -14,9 +14,9 @@ from ..rtklib.runner import run_rnx2rtkp
 
 
 def solve_static(
-    rover: Path,
-    base: Path,
-    nav: Sequence[Path],
+    rover: Path | str,
+    base: Path | str,
+    nav: Sequence[Path | str],
     config: RtkConfig,
     start: pd.Timestamp,
     end: pd.Timestamp,
@@ -36,7 +36,8 @@ def solve_static(
         tint: Processing interval [s]. None for every epoch.
 
     Returns:
-        The last (cumulative) epoch of the forward filter as a row of the `read_pos` table, or None if there is no solution.
+        The last (cumulative) epoch of the forward filter as a row of the `read_pos` table,
+        or None if there is no solution.
 
     Raises:
         FileNotFoundError: If the executable is not found.

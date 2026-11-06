@@ -77,8 +77,8 @@ def read_pos(
     Raises:
         ValueError: If the files mix coordinate formats, or use dms or JST.
     """
-    paths = [Path(paths)] if isinstance(paths, (str, Path)) else [Path(p) for p in paths]
-    headers = {p: _pos_header(p) for p in paths}
+    files = [Path(paths)] if isinstance(paths, (str, Path)) else [Path(p) for p in paths]
+    headers = {p: _pos_header(p) for p in files}
     formats = {fmt for _, fmt in headers.values()}
     if len(formats) > 1:
         raise ValueError(f"cannot mix .pos coordinate formats: {sorted(formats)}")

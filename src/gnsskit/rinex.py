@@ -99,7 +99,7 @@ def header_llh(obs: Path | str, ellipsoid: Ellipsoid = GRS80) -> tuple[float, fl
                 break
     if xyz is None or xyz == (0.0, 0.0, 0.0):
         raise ValueError(f"no valid APPROX POSITION XYZ in {obs}")
-    lat, lon, h = ecef_to_llh(*xyz, ellipsoid=ellipsoid)
+    lat, lon, h = ecef_to_llh(xyz[0], xyz[1], xyz[2], ellipsoid)
     return float(lat), float(lon), float(h) + dh
 
 
@@ -132,7 +132,7 @@ def _convbin_trim(
         cmd += ["-ti", str(interval)]
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_name(f".{dst.name}.tmp")  # an existing dst is only replaced on success
-    proc = subprocess.run([*cmd, "-o", str(tmp), str(src)], capture_output=True)
+    proc = subprocess.run([*cmd, "-o", str(tmp), str(src)], check=False, capture_output=True)
     ok = proc.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0
     if ok:
         tmp.replace(dst)
@@ -275,7 +275,8 @@ def obs_summary(obs: Path | str, gap_factor: float = 1.5) -> dict[str, object]:
 
     Args:
         obs: RINEX 3 observation file.
-        gap_factor: An epoch spacing larger than `gap_factor` times the median interval is a gap.
+        gap_factor: An epoch spacing larger than `gap_factor` times the median interval
+            is a gap.
 
     Returns:
         Dict with `marker`, `first`, `last`, `duration_s`, `interval_s`, `n_epochs`,
