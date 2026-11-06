@@ -573,6 +573,16 @@ Changes:                                                    COMMENT
 Compiled by Arturo Villiger (swisstopo),                    COMMENT             
   e-mail: arturo.villiger@swisstopo.ch                      COMMENT             
 ########################################################### COMMENT             
+########################################################### COMMENT             
+!!! REDUCED FILE FOR THE GNSSKIT EXAMPLE ONLY !!!           COMMENT             
+This is NOT the official igs20.atx: it was trimmed down     COMMENT             
+to a few antennas to keep the example small. Antennas       COMMENT             
+missing here get NO phase center correction (PCO/PCV).      COMMENT             
+Do NOT use it for real work: download the full, current     COMMENT             
+file from the official IGS site instead:                    COMMENT             
+https://files.igs.org/pub/station/general/igs20.atx         COMMENT             
+(see also https://igs.org/wg/antenna/)                      COMMENT             
+########################################################### COMMENT             
                                                             END OF HEADER       
                                                             START OF ANTENNA    
 BLOCK IIIA          G01                 G080      2024-242A TYPE / SERIAL NO    

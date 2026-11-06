@@ -11,7 +11,7 @@ Shared tools for post-processing GNSS data with [RTKLIB](https://www.rtklib.com/
   (span, sampling, gaps, satellites), `read_visibility` and `plot_visibility` (RTKPLOT-style satellite
   visibility, needs the `plot` extra).
 - **Static** (`gnsskit.static`): `solve_static` (one solution over a time window), `process_baseline`
-  (static baselines with covariance) and baseline IO; least-squares adjustment of a redundant baseline
+  (static baselines with covariance), baseline IO and `loop_closures` (misclosure of every triangle of baselines); least-squares adjustment of a redundant baseline
   network in `gnsskit.static.network` (needs the `network` extra).
 - **Kinematic** (`gnsskit.kinematic`): trajectory interpolation and averaging.
 - **Reference systems** (`gnsskit.refsys`): GPST/UTC, ellipsoids, ECEF/geodetic/ENU conversions.
