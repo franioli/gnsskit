@@ -236,18 +236,26 @@ def read_visibility(obs: Path | str) -> pd.DataFrame:
     """Satellites tracked at each epoch of a RINEX 3 observation file.
 
     A satellite counts as tracked if its record has at least one non-blank observation.
-    Event records (epoch flag != 0) are skipped and counted in `attrs["n_events"]`.
+    Event records (epoch flag 2-6) are skipped and counted in `attrs["n_events"]`. The marker
+    names are collected from the header and from the events inside the data: receivers such
+    as Leica write the point name typed on site as a new site occupation (flag 3) followed by
+    a `MARKER NAME` line, while the header holds an automatic name.
 
     Args:
         obs: RINEX 3 observation file.
 
     Returns:
         DataFrame with columns `t` (epoch, as written in the file) and `sat` (e.g. "G05"),
-        one row per tracked satellite and epoch. `attrs` holds `marker` and `n_events`.
+        one row per tracked satellite and epoch. `attrs` holds `marker` (header MARKER NAME,
+        or the file name if missing), `markers` (list of (start, name): every marker name in
+        file order, start None for the header one, else the first epoch after the event) and
+        `n_events`.
     """
     times: list[pd.Timestamp] = []
     sats: list[str] = []
     marker, n_events = Path(obs).stem, 0
+    markers: list[tuple[pd.Timestamp | None, str]] = []
+    pending: str | None = None  # marker name of an event, until the next epoch
     t = None
     with Path(obs).open() as f:
         for line in f:
@@ -255,18 +263,24 @@ def read_visibility(obs: Path | str) -> pd.DataFrame:
                 break
             if "MARKER NAME" in line[60:] and line[:60].strip():
                 marker = line[:60].strip()
+                markers.append((None, marker))
         for line in f:
             if line.startswith(">"):
-                if line[31:32] != "0":
+                if line[31:32] not in ("0", "1"):  # 0 ok, 1 power failure before: both data
                     t = None
                     n_events += 1
                     continue
                 t = _epoch_time(line[1:])
+                if pending is not None:
+                    markers.append((t, pending))
+                    pending = None
+            elif t is None and "MARKER NAME" in line[60:] and line[:60].strip():
+                pending = line[:60].strip()
             elif t is not None and line[:1] in SYSTEMS and line[3:].strip():
                 times.append(t)
                 sats.append(line[:3])
     df = pd.DataFrame({"t": times, "sat": sats})
-    df.attrs.update(marker=marker, n_events=n_events)
+    df.attrs.update(marker=marker, markers=markers, n_events=n_events)
     return df
 
 
@@ -279,7 +293,9 @@ def obs_summary(obs: Path | str, gap_factor: float = 1.5) -> dict[str, object]:
             is a gap.
 
     Returns:
-        Dict with `marker`, `first`, `last`, `duration_s`, `interval_s`, `n_epochs`,
+        Dict with `marker` (header MARKER NAME), `markers` (all the marker names, header and
+        site-occupation events, in file order), `first`, `last`, `duration_s`, `interval_s`,
+        `n_epochs`,
         `n_gaps`, `max_gap_s`, `n_events`, `mean_sats` (per epoch) and `n_sats` (unique
         satellites per system).
 
@@ -295,6 +311,7 @@ def obs_summary(obs: Path | str, gap_factor: float = 1.5) -> dict[str, object]:
     gaps = step[step > gap_factor * interval] if len(step) else step
     return {
         "marker": vis.attrs["marker"],
+        "markers": [name for _, name in vis.attrs["markers"]],
         "first": epochs.iloc[0],
         "last": epochs.iloc[-1],
         "duration_s": float((epochs.iloc[-1] - epochs.iloc[0]).total_seconds()),
@@ -423,7 +440,12 @@ def signal_stats(obs: Path | str) -> pd.DataFrame:
 
 
 def plot_visibility(
-    obs_files: Sequence[Path | str], out: Path | str | None = None, dpi: int = 150
+    obs_files: Sequence[Path | str],
+    out: Path | str | None = None,
+    dpi: int = 150,
+    start: pd.Timestamp | None = None,
+    end: pd.Timestamp | None = None,
+    common_xlim: bool = True,
 ) -> Figure:
     """Satellite visibility plot (as in RTKPLOT), one panel per observation file.
 
@@ -433,6 +455,12 @@ def plot_visibility(
         obs_files: RINEX 3 observation files.
         out: If given, the figure is also saved to this path.
         dpi: Resolution of the saved figure.
+        start: Plot only from this time on, in the time system of the files (GPST).
+            None for the start of the data.
+        end: Plot only up to this time, same time system. None for the end of the data.
+        common_xlim: Give all the panels the same time axis, from the first to the last epoch
+            of all the files (within `start`/`end`), so that the common windows line up.
+            If False each panel spans its own data.
 
     Returns:
         The matplotlib figure.
@@ -440,28 +468,88 @@ def plot_visibility(
     try:
         import matplotlib.dates as mdates
         from matplotlib.figure import Figure
+        from matplotlib.lines import Line2D
     except ImportError as e:  # pragma: no cover
         raise ImportError("plot_visibility needs matplotlib: pip install 'gnsskit[plot]'") from e
 
+    visibility = []
+    for path in obs_files:
+        vis = read_visibility(path)
+        keep = pd.Series(True, index=vis.index)
+        if start is not None:
+            keep &= vis.t >= start
+        if end is not None:
+            keep &= vis.t <= end
+        visibility.append(vis[keep])
+
+    def xlim(times: pd.Series) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+        """Axis range: `start`/`end` if given, else the first and last epoch."""
+        if times.empty and (start is None or end is None):
+            return None
+        lo = start if start is not None else times.min()
+        hi = end if end is not None else times.max()
+        return lo, hi
+
+    common = xlim(pd.concat([v.t for v in visibility])) if common_xlim else None
+
     colors = {"G": "tab:blue", "R": "tab:red", "E": "tab:green", "C": "tab:orange",
               "J": "tab:purple", "S": "tab:gray", "I": "tab:brown"}  # fmt: skip
+    names = {"G": "GPS", "R": "GLONASS", "E": "Galileo", "C": "BeiDou", "J": "QZSS",
+             "S": "SBAS", "I": "NavIC"}  # fmt: skip
     fig = Figure(figsize=(12, 3.5 * len(obs_files)))  # no pyplot: no GUI backend needed
     axes = fig.subplots(len(obs_files), 1, squeeze=False)
-    for ax, path in zip(axes[:, 0], obs_files):
-        vis = read_visibility(path)
+    for ax, path, vis in zip(axes[:, 0], obs_files, visibility):
         sats = sorted(vis.sat.unique())
         for i, sat in enumerate(sats):
             t = vis.t[vis.sat == sat]
             ax.plot(t, [i] * len(t), "|", ms=3, color=colors[sat[0]])
         ax.set_yticks(range(len(sats)), sats, fontsize=5)
+        limits = common if common_xlim else xlim(vis.t)
+        if limits is not None and limits[0] < limits[1]:
+            ax.set_xlim(*limits)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax.set_xlabel("GPST", fontsize=7, loc="right")
         span = f"{vis.t.min():%H:%M:%S} - {vis.t.max():%H:%M:%S}" if len(vis) else "no data"
-        ax.set_title(
-            f"{Path(path).name} [{vis.attrs['marker']}]  {span}  ({len(sats)} sats)",
-            fontsize=9,
-        )
+        site = ", ".join(name for _, name in vis.attrs["markers"]) or vis.attrs["marker"]
+        ax.set_title(f"{Path(path).name} [{site}]  {span}  ({len(sats)} sats)", fontsize=9)
+        for t0, name in vis.attrs["markers"]:  # new site occupations inside the data
+            if t0 is not None and (limits is None or limits[0] <= t0 <= limits[1]):
+                ax.axvline(t0, color="k", ls="--", lw=1)
+                ax.annotate(name, (t0, 1), xycoords=("data", "axes fraction"), xytext=(3, -3),
+                            textcoords="offset points", va="top", fontsize=7, weight="bold")  # fmt: skip
         ax.grid(alpha=0.3)
-    fig.tight_layout()
+        if vis.empty:
+            continue
+        ax.axvspan(vis.t.min(), vis.t.max(), color="0.5", alpha=0.08, lw=0)  # file span
+
+        # satellites tracked per epoch, on a right-hand axis
+        n_sats = vis.groupby("t").size()
+        ax_n = ax.twinx()
+        ax_n.plot(n_sats.index, n_sats.to_numpy(), color="k", lw=0.8, alpha=0.6)
+        ax_n.set_ylim(0, 1.15 * n_sats.max())
+        ax_n.set_ylabel("sats per epoch", fontsize=7)
+        ax_n.tick_params(labelsize=6)
+
+        # sampling and tracking of the plotted window
+        epochs = n_sats.index.to_series()
+        step = epochs.diff().dt.total_seconds()
+        interval = step.median() if len(epochs) > 1 else float("nan")
+        gaps = int((step > 1.5 * interval).sum()) if len(epochs) > 1 else 0
+        per_sys = " ".join(
+            f"{s}{sum(x[0] == s for x in sats)}" for s in sorted({x[0] for x in sats})
+        )
+        info = (
+            f"interval {interval:g} s, {len(epochs)} epochs, {gaps} gaps\n"
+            f"sats {per_sys}, per epoch {n_sats.min()}-{n_sats.max()} (mean {n_sats.mean():.1f})"
+        )
+        ax.text(0.005, 0.98, info, transform=ax.transAxes, va="top", ha="left", fontsize=6,
+                bbox={"boxstyle": "round", "fc": "white", "ec": "0.7", "alpha": 0.85})  # fmt: skip
+
+    used = sorted({s[0] for v in visibility for s in v.sat.unique()}, key=list(colors).index)
+    handles = [Line2D([], [], color=colors[s], lw=3, label=names[s]) for s in used]
+    handles.append(Line2D([], [], color="k", lw=0.8, alpha=0.6, label="sats per epoch"))
+    fig.legend(handles=handles, loc="upper center", ncol=len(handles), fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0, 1, 1 - 0.25 / fig.get_figheight()))
     if out is not None:
         fig.savefig(out, dpi=dpi)
     return fig

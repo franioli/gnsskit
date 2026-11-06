@@ -33,7 +33,23 @@ def rnx(tmp_path: Path) -> Path:
 def test_read_visibility(rnx: Path) -> None:
     vis = read_visibility(rnx)
     assert len(vis) == 6 and set(vis.sat) == {"G01", "R02", "E03"}  # blank G02 dropped
-    assert vis.attrs == {"marker": "TEST", "n_events": 1}
+    assert vis.attrs == {"marker": "TEST", "markers": [(None, "TEST")], "n_events": 1}
+
+
+def test_marker_names_from_header_and_site_occupation(tmp_path: Path) -> None:
+    f = tmp_path / "m.26o"
+    f.write_text(
+        "AUTO_0001                                                   MARKER NAME\n"
+        "                                                            END OF HEADER\n"
+        "> 2026 11 04 09 00  0.0000000  0  1\nG01  1.0\n"
+        ">                              3  1\n"
+        "A3                                                          MARKER NAME\n"
+        "> 2026 11 04 09 00  5.0000000  1  1\nG01  1.0\n"  # flag 1 (power failure): data
+    )
+    vis = read_visibility(f)
+    assert vis.attrs["marker"] == "AUTO_0001" and vis.attrs["n_events"] == 1
+    assert vis.attrs["markers"] == [(None, "AUTO_0001"), (pd.Timestamp("2026-11-04 09:00:05"), "A3")]
+    assert len(vis) == 2 and obs_summary(f)["markers"] == ["AUTO_0001", "A3"]
 
 
 def test_obs_summary(rnx: Path) -> None:
@@ -50,6 +66,23 @@ def test_plot_visibility(rnx: Path, tmp_path: Path) -> None:
     out = tmp_path / "vis.png"
     plot_visibility([rnx, rnx], out)
     assert out.stat().st_size > 0
+
+
+def test_plot_visibility_window_and_common_axis(rnx: Path, tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    import matplotlib.dates as mdates
+
+    late = tmp_path / "late.26O"  # same data shifted by 1 h
+    late.write_text(rnx.read_text().replace("> 2026 11 04 09", "> 2026 11 04 10"))
+    t0, t1 = pd.Timestamp("2026-11-04 09:00:00"), pd.Timestamp("2026-11-04 10:00:06")
+    common = plot_visibility([rnx, late]).axes
+    assert common[0].get_xlim() == common[1].get_xlim()  # both span 09:00:00 - 10:00:06
+    assert common[0].get_xlim() == pytest.approx(mdates.date2num([t0, t1]))
+    own = plot_visibility([rnx, late], common_xlim=False).axes
+    assert own[0].get_xlim()[1] == pytest.approx(mdates.date2num(t0 + pd.Timedelta(seconds=6)))
+    window = plot_visibility([rnx, late], start=t0 + pd.Timedelta(seconds=1), end=t0 + pd.Timedelta(seconds=2))
+    assert "09:00:01 - 09:00:02" in window.axes[0].get_title()
+    assert "no data" in window.axes[1].get_title()
 
 
 @pytest.fixture
