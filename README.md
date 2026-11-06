@@ -14,7 +14,8 @@ Shared tools for post-processing GNSS data with [RTKLIB](https://www.rtklib.com/
   (static baselines with covariance), baseline IO and `loop_closures` (misclosure of every triangle of baselines); least-squares adjustment of a redundant baseline
   network in `gnsskit.static.network` (needs the `network` extra).
 - **Kinematic** (`gnsskit.kinematic`): trajectory interpolation and averaging.
-- **Reference systems** (`gnsskit.refsys`): GPST/UTC, ellipsoids, ECEF/geodetic/ENU conversions.
+- **Reference systems** (`gnsskit.refsys`): GPST/UTC, ellipsoids, ECEF/geodetic conversions and
+  `ENUFrame`, a local east-north-up frame at a point (points, vectors and covariances, both ways).
 
 ## Install
 

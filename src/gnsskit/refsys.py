@@ -281,6 +281,10 @@ def enu_diff(
 ) -> np.ndarray:
     """(E, N, U) offsets of points from reference points, by small-difference approximation.
 
+    Each point gets its own reference point (vectorised), e.g. epochs vs their mean. The
+    error grows as d^2 / (2 R): < 0.01 mm at 10 m, 0.8 mm at 100 m, 8 cm at 1 km. For
+    longer offsets use `ENUFrame`, which is exact.
+
     Args:
         lat: Latitude of the points [deg].
         lon: Longitude of the points [deg].

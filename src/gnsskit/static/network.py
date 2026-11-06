@@ -9,9 +9,13 @@ Notation (as in the course notebooks):
     Cxx = sigma_v_hat N^-1,  Cyy = sigma_v_hat A N^-1 A^T,  Cvv = sigma_v_hat (Q - A N^-1 A^T)
 
 Stochastic model of a baseline (`stochastic` argument of `adjust_network`):
-    "apriori": east/north/up errors, uncorrelated, with sd = a + b[ppm] * length;
-               realistic for 10 min of static data.
-    "rtklib":  formal covariance of the RTKLIB solution (optimistic, see MIN_VARIANCE).
+    "rtklib_scaled": formal RTKLIB covariance times a variance factor k_s (default, see K_S).
+    "rtklib":  formal covariance of the RTKLIB solution; optimistic (sigma_v_hat >> 1),
+               because RTKLIB treats the epochs as independent.
+    "apriori": east/north/up errors, uncorrelated, with sd = a + b[ppm] * length.
+
+Scaling Q by k_s leaves X_hat, Cxx, Cvv and tau unchanged and divides sigma_v_hat by k_s:
+only the global test depends on it.
 
 Layout: the stochastic model (Q) and the functional model (A, b) are built from the
 baselines, then `weighted_least_squares` solves the generic problem, which does not depend
@@ -46,9 +50,14 @@ except ImportError as e:  # pragma: no cover
 SIGMA_H = (5e-3, 1.0)  # horizontal: 5 mm + 1 ppm
 SIGMA_V = (10e-3, 2.0)  # vertical: 10 mm + 2 ppm
 
-# RTKLIB prints standard deviations rounded to 0.1 mm, which can make a 3x3 covariance
-# non-positive-definite; its eigenvalues are floored at this variance before inversion.
-MIN_VARIANCE = 1e-3**2  # m^2
+# Variance factor of the RTKLIB covariance for 5 s epochs. RTKLIB treats the epochs as
+# independent; with errors correlated as exp(-dt / T), the variance of the mean is too small
+# by (1 + rho) / (1 - rho) ~ 2 T / dt. T ~ 60 s (multipath at a static site), dt = 5 s -> 24.
+# For another interval use k_s ~ 2 * 60 / dt, e.g. 120 for 1 s, 8 for 15 s.
+K_S = 25.0
+
+# RTKLIB prints standard deviations rounded to 0.1 mm, which can make a 3x3 covariance matrix non-positive-definite; its eigenvalues are floored at this variance before inversion.
+MIN_VARIANCE = 1e-6**2  # m^2, (1 um)^2: far below any GNSS precision, touches only broken matrices
 
 TAU_CRITICAL = 3.29  # two-sided 0.1 % level of a standard normal (Baarda data snooping)
 
@@ -174,8 +183,10 @@ class Adjustment:
 
 
 def _make_pd(cov: np.ndarray) -> np.ndarray:
-    """Covariance with eigenvalues floored at MIN_VARIANCE."""
+    """Covariance with eigenvalues floored at MIN_VARIANCE; unchanged if already above it."""
     w, vec = np.linalg.eigh(cov)
+    if w.min() >= MIN_VARIANCE:
+        return cov
     return (vec * np.maximum(w, MIN_VARIANCE)) @ vec.T
 
 
@@ -198,6 +209,7 @@ def _observation_covariance(
     stochastic: str,
     sigma_h: tuple[float, float],
     sigma_v: tuple[float, float],
+    k_s: float,
 ) -> np.ndarray:
     """Block-diagonal covariance Q of the observations, one 3x3 block per baseline."""
     # One east-north-up rotation, taken at the first fixed point, serves a small network
@@ -209,7 +221,7 @@ def _observation_covariance(
         if stochastic == "apriori":
             block = _apriori_block(bl.length, R_enu, sigma_h, sigma_v)
         else:
-            block = _make_pd(bl.cov)
+            block = _make_pd(bl.cov) * (k_s if stochastic == "rtklib_scaled" else 1.0)
         Q[3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = block
     return Q
 
@@ -250,35 +262,51 @@ def _design_matrix(
 def adjust_network(
     baselines: Sequence[BaselineResult],
     fixed: Mapping[str, Sequence[float]],
-    stochastic: Literal["apriori", "rtklib"] = "apriori",
+    stochastic: Literal["rtklib_scaled", "rtklib", "apriori"] = "rtklib_scaled",
     sigma_h: tuple[float, float] = SIGMA_H,
     sigma_v: tuple[float, float] = SIGMA_V,
+    k_s: float = K_S,
 ) -> Adjustment:
     """Weighted least squares of the baseline vectors with the `fixed` points held.
+
+    The default model is the RTKLIB covariance scaled by `k_s` = 25 (sd x 5), a value for
+    baselines processed at 5 s epochs: RTKLIB treats the epochs as independent, while real
+    errors are correlated over about a minute (see K_S). For another processing interval dt
+    use k_s ~ 120 / dt [s]. Choose k_s before looking at the network: setting it to the
+    sigma_v_hat of the "rtklib" model makes the global test meaningless.
 
     Args:
         baselines: Baselines (base -> rover vectors) forming the network.
         fixed: Point name -> ECEF coordinates [m] of the held points.
-        stochastic: Baseline error model, "apriori" (ENU errors from `sigma_h`/`sigma_v`)
-            or "rtklib" (formal RTKLIB covariance); see the module docstring.
+        stochastic: Baseline error model: "rtklib_scaled" (RTKLIB covariance x `k_s`),
+            "rtklib" (formal RTKLIB covariance) or "apriori" (ENU errors from
+            `sigma_h`/`sigma_v`); see the module docstring.
         sigma_h: A-priori horizontal precision as (constant [m], ppm of the length).
             Used by the "apriori" model only.
         sigma_v: A-priori vertical precision, same form. "apriori" only.
+        k_s: Variance factor of the RTKLIB covariance. "rtklib_scaled" only.
 
     Returns:
         The adjustment, with parameters for the points not in `fixed`.
 
     Raises:
-        ValueError: If `stochastic` is not "apriori" or "rtklib".
+        ValueError: If `stochastic` is not one of the three models.
     """
-    if stochastic not in ("apriori", "rtklib"):
-        raise ValueError(f"stochastic must be 'apriori' or 'rtklib', not {stochastic!r}")
+    if stochastic not in ("rtklib_scaled", "rtklib", "apriori"):
+        raise ValueError(
+            f"stochastic must be 'rtklib_scaled', 'rtklib' or 'apriori', not {stochastic!r}"
+        )
+    if stochastic == "rtklib_scaled":
+        print(
+            f"adjust_network: RTKLIB covariance x k_s = {k_s:g} (sd x {np.sqrt(k_s):.1f}); "
+            "k_s = 25 suits 5 s epochs, use k_s ~ 120 / dt[s] for another interval"
+        )
     fixed_xyz = {p: np.asarray(x, dtype=float) for p, x in fixed.items()}
     points = dict.fromkeys(p for bl in baselines for p in (bl.base, bl.rover))
     unknowns = [p for p in points if p not in fixed_xyz]
 
     y0 = np.concatenate([bl.dxyz for bl in baselines])
-    Q = _observation_covariance(baselines, fixed_xyz, stochastic, sigma_h, sigma_v)
+    Q = _observation_covariance(baselines, fixed_xyz, stochastic, sigma_h, sigma_v, k_s)
     A, b = _design_matrix(baselines, unknowns, fixed_xyz)
     sol = weighted_least_squares(A, Q, y0, b)
 

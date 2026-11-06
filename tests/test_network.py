@@ -4,7 +4,13 @@ import pytest
 from scipy.optimize import least_squares
 
 from gnsskit.static.baseline import BaselineResult, read_baselines
-from gnsskit.static.network import adjust_network, coordinate_table, residual_table
+from gnsskit.static.network import (
+    MIN_VARIANCE,
+    _make_pd,
+    adjust_network,
+    coordinate_table,
+    residual_table,
+)
 
 from conftest import DATA
 
@@ -74,7 +80,7 @@ def test_matches_scipy_least_squares_on_whitened_residuals() -> None:
 def test_course_network_regression() -> None:
     """Frozen output on the 2026-10-07 Mantova data (values from the course notebook run)."""
     fixed = {"063604": [4428814.9484, 859166.7316, 4493637.0158]}
-    adj = adjust_network(read_baselines(DATA / "baselines.csv"), fixed)
+    adj = adjust_network(read_baselines(DATA / "baselines.csv"), fixed, stochastic="apriori")
     assert adj.dof == 9 and adj.tau.max() < 3.29
     lo, hi = adj.sigma_v_hat_bounds
     assert lo < adj.sigma_v_hat < hi
@@ -87,3 +93,20 @@ def test_course_network_regression() -> None:
     }
     for p, enh in expected.items():
         assert utm.loc[p, ["E", "N", "h_ell"]].to_numpy(float) == pytest.approx(enh, abs=1e-4)
+
+
+def test_rtklib_covariance_is_kept_unless_not_positive_definite() -> None:
+    healthy = np.diag([9e-8, 4e-8, 2.5e-7])  # sd 0.3, 0.2, 0.5 mm: typical formal RTKLIB values
+    assert np.array_equal(_make_pd(healthy), healthy)
+    broken = np.array([[1e-8, 1e-8, 0.0], [1e-8, 1e-8, 0.0], [0.0, 0.0, 1e-8]])  # singular (rounding)
+    assert np.linalg.eigvalsh(_make_pd(broken)).min() == pytest.approx(MIN_VARIANCE)
+
+
+def test_scaled_rtklib_model_changes_only_the_variance_factor() -> None:
+    bl = _baselines(noise=2e-3, seed=3)
+    raw = adjust_network(bl, {"A": TRUE["A"]}, stochastic="rtklib")
+    scaled = adjust_network(bl, {"A": TRUE["A"]}, k_s=25.0)  # the default model
+    assert np.allclose(scaled.Q, 25 * raw.Q)
+    assert np.allclose(scaled.X_hat, raw.X_hat) and np.allclose(scaled.Cxx, raw.Cxx)
+    assert np.allclose(scaled.tau, raw.tau, atol=1e-5)
+    assert scaled.sigma_v_hat == pytest.approx(raw.sigma_v_hat / 25)
