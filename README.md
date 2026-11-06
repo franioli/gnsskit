@@ -30,6 +30,7 @@ With [uv](https://docs.astral.sh/uv/) (recommended), in your project:
 uv add gnsskit                  # library
 uv add "gnsskit[network]"       # + network adjustment (scipy, pyproj)
 uv add "gnsskit[network,plot]"  # + satellite visibility plots (matplotlib)
+uv add "gnsskit[all]"           # every extra
 uv add git+https://github.com/franioli/gnsskit   # development version
 ```
 
@@ -39,7 +40,7 @@ With pip:
 
 ```sh
 pip install gnsskit
-pip install "gnsskit[network,plot]"
+pip install "gnsskit[all]"   # with every extra
 ```
 
 ### RTKLIB (required separately)

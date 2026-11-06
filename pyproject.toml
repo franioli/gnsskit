@@ -24,6 +24,7 @@ dependencies = ["numpy", "pandas>=2"]
 [project.optional-dependencies]
 network = ["scipy", "pyproj"]
 plot = ["matplotlib"]
+all = ["scipy", "pyproj", "matplotlib"]  # every extra above
 
 [project.urls]
 Repository = "https://github.com/franioli/gnsskit"
