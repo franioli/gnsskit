@@ -97,17 +97,30 @@ Issues are welcome on [GitHub](https://github.com/franioli/gnsskit/issues). To c
 
 ## Releasing a new version
 
-For the current maintainers only (it needs the PyPI credentials of the project).
+For the current maintainers only (it needs write access to the repository and to the PyPI
+project).
 
-1. Bump `version` in `pyproject.toml` (PyPI never accepts the same version twice), run the
-   tests (`uv run pytest`), then commit and tag:
-   ```sh
-   git commit -am "Release X.Y.Z" && git tag -a vX.Y.Z -m "gnsskit X.Y.Z"
-   git push origin main --tags
-   ```
-2. Build and upload, with a PyPI API token scoped to the `gnsskit` project kept outside the
-   repository (here in `~/.config/pypi/gnsskit.token`, `chmod 600`):
-   ```sh
-   rm -rf dist && uv build
-   UV_PUBLISH_TOKEN=$(cat ~/.config/pypi/gnsskit.token) uv publish
-   ```
+Publishing a GitHub release runs [`.github/workflows/publish.yml`](.github/workflows/publish.yml),
+which checks that the tag matches the version, runs the tests, builds and uploads to PyPI:
+
+```sh
+uv version --bump patch            # or minor / major: updates pyproject.toml
+uv run pytest
+git commit -am "Release $(uv version --short)" && git push
+gh release create "v$(uv version --short)" --generate-notes   # tag + release -> PyPI
+```
+
+`gh release create` creates the tag on the pushed commit; without the GitHub CLI, push a tag
+(`git tag -a vX.Y.Z -m "gnsskit X.Y.Z" && git push origin vX.Y.Z`) and create the release from it
+on GitHub. PyPI never accepts the same version twice.
+
+One-time setup of the automatic upload (PyPI Trusted Publishing, no token): on pypi.org, project
+gnsskit -> Settings -> Publishing -> add a GitHub publisher with owner `franioli`, repository
+`gnsskit`, workflow `publish.yml` and environment `pypi`.
+
+Manual upload, if needed, with a project-scoped token kept outside the repository:
+
+```sh
+rm -rf dist && uv build
+UV_PUBLISH_TOKEN=$(cat ~/.config/pypi/gnsskit.token) uv publish
+```
