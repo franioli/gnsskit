@@ -1,6 +1,6 @@
 [project]
 name = "gnsskit"
-version = "0.4.1"
+version = "0.4.2"
 description = "RTKLIB-based GNSS post-processing toolkit: RINEX tools, RTKLIB wrappers, static baselines and network adjustment, kinematic trajectories"
 readme = "README.md"
 license = "MIT"
