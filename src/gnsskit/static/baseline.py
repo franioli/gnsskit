@@ -9,7 +9,7 @@ part is only how it is built (`baseline_from_solution`, `extract_baseline`) and 
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -47,8 +47,13 @@ class BaselineResult:
     cov: np.ndarray  # (3, 3) m^2, formal covariance of dxyz
     q: int  # 1 = fixed, 2 = float
     ns: int  # satellites used
-    ratio: float  # ambiguity validation ratio
+    ratio: float  # ambiguity validation ratio of the final epoch
     pos_file: Path | None = None
+    # Statistics over all the epochs of the solution (NaN if unknown); with RTKLIB
+    # out-solstatic=single there is only the final epoch, so they say nothing
+    n_epochs: int = 0  # solution epochs
+    fix_pct: float = float("nan")  # % of fixed epochs (Q == 1)
+    ratio_median: float = float("nan")  # median ratio over the epochs
 
     @property
     def length(self) -> float:
@@ -82,12 +87,18 @@ class BaselineResult:
             "Q": self.q,
             "ns": self.ns,
             "ratio": self.ratio,
+            "n_epochs": self.n_epochs,
+            "fix_pct": self.fix_pct,
+            "ratio_median": self.ratio_median,
             "pos_file": str(self.pos_file) if self.pos_file else "",
         }
 
     @classmethod
     def from_row(cls, row: Mapping[Hashable, Any]) -> BaselineResult:
-        """Inverse of `to_row`; `length` is recomputed, not read."""
+        """Inverse of `to_row`; `length` is recomputed, not read.
+
+        Tables without the epoch statistics (older files) give n_epochs 0 and NaN.
+        """
         cov = np.zeros((3, 3))
         for k, (i, j) in _COV_ENTRIES.items():
             cov[i, j] = cov[j, i] = row[f"cov_{k}"]
@@ -103,7 +114,15 @@ class BaselineResult:
             ns=int(row["ns"]),
             ratio=float(row["ratio"]),
             pos_file=Path(pos_file) if isinstance(pos_file, str) and pos_file else None,
+            n_epochs=int(_float(row.get("n_epochs"), 0.0)),
+            fix_pct=_float(row.get("fix_pct")),
+            ratio_median=_float(row.get("ratio_median")),
         )
+
+
+def _float(value: Any, missing: float = float("nan")) -> float:
+    """Float from a table cell; `missing` for an absent or empty cell."""
+    return missing if value is None or value == "" or pd.isna(value) else float(value)
 
 
 def _timestamp(value: Any) -> pd.Timestamp:
@@ -160,10 +179,12 @@ def baseline_from_solution(
 def extract_baseline(
     pos_file: Path | str, rover: str, base: str, session: str = ""
 ) -> BaselineResult | None:
-    """Final-epoch baseline from an xyz .pos file.
+    """Final-epoch baseline from an xyz .pos file, with statistics over all its epochs.
 
     The vector is the last solution minus the base position in the `% ref pos` header, so the
-    file needs `out-solformat=xyz` and `out-outhead=on`.
+    file needs `out-solformat=xyz` and `out-outhead=on`. The ratio of the last epoch alone is
+    a noisy indicator: `fix_pct` and `ratio_median` describe the whole session, if the file
+    has all the epochs (RTKLIB out-solstatic=all, the default).
 
     Args:
         pos_file: RTKLIB .pos file.
@@ -182,8 +203,14 @@ def extract_baseline(
         raise ValueError(f"{pos_file}: need out-solformat=xyz to extract a baseline")
     if pos.empty:
         return None
-    return baseline_from_solution(
+    bl = baseline_from_solution(
         pos.iloc[-1], read_ref_pos(pos_file), rover, base, session, pos_file
+    )
+    return replace(
+        bl,
+        n_epochs=len(pos),
+        fix_pct=100.0 * float((pos["Q"] == 1).mean()),
+        ratio_median=float(pos["ratio"].median()),
     )
 
 
@@ -248,8 +275,9 @@ def baselines_to_df(results: Sequence[BaselineResult]) -> pd.DataFrame:
 
     Returns:
         DataFrame with columns session, base, rover, epoch, dx, dy, dz, the covariance terms
-        cov_xx, cov_xy, cov_xz, cov_yy, cov_yz, cov_zz [m^2], length, Q, ns, ratio and
-        pos_file (empty string if unknown).
+        cov_xx, cov_xy, cov_xz, cov_yy, cov_yz, cov_zz [m^2], length, Q, ns, ratio (final
+        epoch), n_epochs, fix_pct, ratio_median (all epochs) and pos_file (empty string if
+        unknown).
     """
     return pd.DataFrame([b.to_row() for b in results])
 

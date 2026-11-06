@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from gnsskit.rtklib.pos import pos_covariance
+from gnsskit.rtklib.pos import pos_covariance, read_pos
 from gnsskit.static.baseline import (
     BaselineResult, baseline_from_solution, extract_baseline, read_baselines, write_baselines,
 )  # fmt: skip
@@ -28,6 +28,10 @@ def test_extract_baseline_takes_last_epoch() -> None:
         [4428458.8882 - 4428814.9484, 857020.7700 - 859166.7316, 4494395.6355 - 4493637.0158],
     )
     assert b.is_good() and b.cov[0, 0] == pytest.approx(0.0017**2)
+    pos = read_pos(DATA / "xyz_static.pos")  # statistics over all the epochs
+    assert b.n_epochs == len(pos) > 1
+    assert b.fix_pct == pytest.approx(100 * (pos.Q == 1).mean())
+    assert b.ratio_median == pytest.approx(pos.ratio.median())
 
 
 def test_baseline_from_solution() -> None:
@@ -55,3 +59,6 @@ def test_write_read_round_trip(tmp_path: Path) -> None:
     back = read_baselines(write_baselines([b], tmp_path / "x" / "b.csv"))[0]
     assert (back.base, back.rover, back.session) == ("063604", "1005", "S1")
     assert np.allclose(back.cov, cov) and np.allclose(back.dxyz, b.dxyz) and back.epoch == b.epoch
+    assert back.n_epochs == 0 and np.isnan(back.fix_pct)  # unknown statistics stay unknown
+    old = read_baselines(DATA / "baselines.csv")  # written before the statistics existed
+    assert old[0].n_epochs == 0 and np.isnan(old[0].ratio_median)

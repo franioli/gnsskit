@@ -156,8 +156,7 @@ class RtkConfig:
     outstat: OutStat | None = _opt("out-outstat")
     # "on": write the single-point solution at epochs where the RTK solution fails (outage)
     outsingle: Literal["on", "off"] | None = _opt("out-outsingle", "off")
-    # static modes: "all" epochs (cumulative solution) or "single", only the final solution
-    # (one line, time-tagged at the first epoch of the processed span)
+    # static modes: "all" epochs (cumulative solution) or "single", only the final solution (one line, time-tagged at the first epoch of the processed span)
     solstatic: Literal["all", "single"] | None = _opt("out-solstatic")
 
     # --- anything else, as raw RTKLIB keys ---
