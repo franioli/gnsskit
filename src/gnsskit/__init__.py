@@ -32,7 +32,13 @@ from .rtklib import (
     read_ref_pos,
     run_rnx2rtkp,
 )
-from .static import baselines_to_df, df_to_baselines, process_baseline, solve_static
+from .static import (
+    baselines_to_df,
+    df_to_baselines,
+    loop_closures,
+    process_baseline,
+    solve_static,
+)
 
 __version__ = version("gnsskit")
 __all__ = [
@@ -49,6 +55,7 @@ __all__ = [
     "gpst_to_local",
     "header_llh",
     "interpolate",
+    "loop_closures",
     "navsys_mask",
     "obs_summary",
     "plot_visibility",

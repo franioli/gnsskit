@@ -154,6 +154,9 @@ class RtkConfig:
     height: HeightType | None = _opt("out-height")
     geoid: GeoidModel | None = _opt("out-geoid")
     outstat: OutStat | None = _opt("out-outstat")
+    outsingle: str | None = _opt(
+        "out-outsingle", "off"
+    )  # "on" or "off" for single static solutions
 
     # --- anything else, as raw RTKLIB keys ---
     extra: Mapping[str, str] = field(default_factory=dict)

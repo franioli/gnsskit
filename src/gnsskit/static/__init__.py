@@ -14,6 +14,7 @@ from .baseline import (
     read_baselines,
     write_baselines,
 )
+from .closure import loop_closures
 from .solve import solve_static
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "baselines_to_df",
     "df_to_baselines",
     "extract_baseline",
+    "loop_closures",
     "process_baseline",
     "read_baselines",
     "solve_static",

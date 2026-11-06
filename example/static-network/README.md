@@ -24,7 +24,7 @@ installation instructions (RTKLIB demo5 is recommended).
 | Folder | Content |
 |---|---|
 | `rinex/` | Observation (`.26o`) and broadcast navigation (`.26n` GPS, `.26g` GLONASS, `.26l` Galileo) files, one set per point |
-| `aux/` | CODE final MGEX products for day 280: `*_ORB.SP3` orbits, `*_CLK.CLK` clocks, and the `igs20.atx` antenna models |
+| `aux/` | CODE final MGEX products for day 280: `*_ORB.SP3` orbits, `*_CLK.CLK` clocks, and the `igs20_reduced_example.atx` antenna models (a reduced copy for the example, not for real work: get the full `igs20.atx` from <https://files.igs.org/pub/station/general/igs20.atx>) |
 | `rtklib.conf` | RTKLIB options: static, GPS+GLONASS+Galileo, L1+L2, `sateph = precise` |
 | `output/` | Output of the notebooks (not in the repository) |
 
