@@ -60,3 +60,25 @@ def test_gpst_to_local_follows_daylight_saving() -> None:
     both = gpst_to_local(pd.Series([winter, summer]))
     assert both.tolist() == [pd.Timestamp("2026-11-04 10:49:44"), pd.Timestamp("2026-07-01 14:00:00")]
     assert utc_to_gpst(gpst_to_local(winter, "UTC", 0)) == winter + pd.Timedelta(seconds=18)
+
+
+def test_enu_frame_points_vectors_and_covariances() -> None:
+    frame = refsys.ENUFrame.from_llh(45.48, 9.23, 150.0)
+    assert np.allclose(frame.to_enu(frame.origin), 0)
+    assert np.allclose(frame.llh_to_enu(45.48, 9.23, 250.0), [0, 0, 100], atol=1e-6)
+    pts = frame.origin + np.array([[300.0, -200.0, 50.0], [-10.0, 700.0, 5.0]])
+    assert np.allclose(frame.to_ecef(frame.to_enu(pts)), pts)
+    lat, lon, h = frame.enu_to_llh(frame.to_enu(pts))
+    assert np.allclose(refsys.llh_to_ecef(lat, lon, h), pts, atol=1e-6)
+    # a vector is only rotated: the difference of two transformed points
+    assert np.allclose(frame.vector_to_enu(pts[1] - pts[0]), frame.to_enu(pts[1]) - frame.to_enu(pts[0]))
+    cov = np.array([[4.0, 1.0, 2.0], [1.0, 3.0, 0.5], [2.0, 0.5, 5.0]])
+    assert np.allclose(frame.cov_to_ecef(frame.cov_to_enu(cov)), cov)
+    assert np.trace(frame.cov_to_enu(cov)) == pytest.approx(np.trace(cov))  # rotation invariant
+    # independent reference: PROJ topocentric conversion (exact, like ENUFrame)
+    topo = Transformer.from_pipeline(
+        "+proj=pipeline +step +proj=cart +ellps=GRS80 "
+        "+step +proj=topocentric +ellps=GRS80 +lat_0=45.48 +lon_0=9.23 +h_0=150"
+    )
+    lat1, lon1, h1 = 45.486, 9.238, 160.0
+    assert np.allclose(frame.llh_to_enu(lat1, lon1, h1), topo.transform(lon1, lat1, h1), atol=1e-6)

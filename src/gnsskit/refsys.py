@@ -8,6 +8,7 @@ the two give the same coordinates to about 0.1 mm.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TypeVar
 
 import numpy as np
@@ -149,7 +150,7 @@ def ecef_to_llh(
 
 
 # =============================================================================
-# Local frames: ENU rotation and small-difference offsets
+# Local frames: ENU rotation, ENU frame and small-difference offsets
 # =============================================================================
 
 
@@ -171,6 +172,80 @@ def ecef_to_enu_matrix(lat: float, lon: float) -> np.ndarray:
             [np.cos(phi) * np.cos(lam), np.cos(phi) * np.sin(lam), np.sin(phi)],
         ]
     )
+
+
+@dataclass(frozen=True, eq=False)
+class ENUFrame:
+    """Local east-north-up frame with origin at a point, tangent to the ellipsoid there.
+
+    Points are shifted to the origin and rotated; vectors (baselines) and covariance matrices
+    are only rotated: enu = R (xyz - origin), denu = R dxyz, C_enu = R C_xyz R^T.
+    Methods take one (3,) array or a stack (n, 3); covariances (3, 3) or (n, 3, 3).
+    """
+
+    origin: np.ndarray  # (3,) ECEF of the origin [m]
+    ellipsoid: Ellipsoid = GRS80
+
+    @classmethod
+    def from_ecef(cls, xyz: ArrayLike, ellipsoid: Ellipsoid = GRS80) -> ENUFrame:
+        """Frame with origin at an ECEF point [m]."""
+        return cls(np.asarray(xyz, float).reshape(3), ellipsoid)
+
+    @classmethod
+    def from_llh(cls, lat: float, lon: float, h: float, ellipsoid: Ellipsoid = GRS80) -> ENUFrame:
+        """Frame with origin at a geodetic point (lat, lon [deg], ellipsoidal h [m])."""
+        return cls(llh_to_ecef(lat, lon, h, ellipsoid), ellipsoid)
+
+    @cached_property
+    def llh(self) -> tuple[float, float, float]:
+        """Geodetic coordinates of the origin: lat, lon [deg], h [m]."""
+        lat, lon, h = ecef_to_llh(*self.origin, ellipsoid=self.ellipsoid)
+        return float(lat), float(lon), float(h)
+
+    @cached_property
+    def rotation(self) -> np.ndarray:
+        """(3, 3) rotation R from ECEF to ENU; its inverse is R^T."""
+        lat, lon, _ = self.llh
+        return ecef_to_enu_matrix(lat, lon)
+
+    # --- points: shift to the origin and rotate ---------------------------------
+
+    def to_enu(self, xyz: ArrayLike) -> np.ndarray:
+        """ENU coordinates [m] of ECEF points [m]."""
+        return self.vector_to_enu(np.asarray(xyz, float) - self.origin)
+
+    def to_ecef(self, enu: ArrayLike) -> np.ndarray:
+        """ECEF coordinates [m] of ENU points [m]."""
+        return self.origin + self.vector_to_ecef(enu)
+
+    def llh_to_enu(self, lat: ArrayLike, lon: ArrayLike, h: ArrayLike) -> np.ndarray:
+        """ENU coordinates [m] of geodetic points (lat, lon [deg], h [m])."""
+        return self.to_enu(llh_to_ecef(lat, lon, h, self.ellipsoid))
+
+    def enu_to_llh(self, enu: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Geodetic coordinates (lat, lon [deg], h [m]) of ENU points [m]."""
+        xyz = self.to_ecef(enu)
+        return ecef_to_llh(xyz[..., 0], xyz[..., 1], xyz[..., 2], self.ellipsoid)
+
+    # --- vectors and covariances: rotation only ---------------------------------
+
+    def vector_to_enu(self, dxyz: ArrayLike) -> np.ndarray:
+        """ENU components of ECEF vectors (e.g. baselines)."""
+        return np.asarray(dxyz, float) @ self.rotation.T
+
+    def vector_to_ecef(self, denu: ArrayLike) -> np.ndarray:
+        """ECEF components of ENU vectors."""
+        return np.asarray(denu, float) @ self.rotation
+
+    def cov_to_enu(self, cov: ArrayLike) -> np.ndarray:
+        """ENU covariances R C R^T of ECEF covariances."""
+        r = self.rotation
+        return r @ np.asarray(cov, float) @ r.T
+
+    def cov_to_ecef(self, cov: ArrayLike) -> np.ndarray:
+        """ECEF covariances R^T C R of ENU covariances."""
+        r = self.rotation
+        return r.T @ np.asarray(cov, float) @ r
 
 
 def radii(
