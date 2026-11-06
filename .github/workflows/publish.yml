@@ -1,16 +1,19 @@
-# Build, test and publish gnsskit to PyPI when a GitHub release is published.
-# Uses PyPI Trusted Publishing: no token is stored; PyPI trusts this workflow
-# (configured once on pypi.org -> gnsskit -> Settings -> Publishing).
+# Build, test and publish gnsskit with PyPI Trusted Publishing (no token stored):
+#   - a published GitHub release uploads its version to PyPI (environment "pypi");
+#   - a manual run (Actions -> Run workflow, or `gh workflow run publish.yml`) uploads a
+#     unique X.Y.Z.devN version to TestPyPI (environment "testpypi"), to test the pipeline.
+# The trusted publishers are configured once on pypi.org and test.pypi.org.
 name: Publish to PyPI
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: ${{ github.event_name == 'release' && 'pypi' || 'testpypi' }}
     permissions:
       id-token: write # needed by Trusted Publishing
       contents: read
@@ -19,6 +22,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Check that the tag matches the package version
+        if: github.event_name == 'release'
         run: |
           version="$(uv version --short)"
           if [ "$GITHUB_REF_NAME" != "v$version" ]; then
@@ -26,11 +30,20 @@ jobs:
             exit 1
           fi
 
+      - name: Unique development version for TestPyPI
+        if: github.event_name != 'release'
+        run: uv version "$(uv version --short).dev${GITHUB_RUN_NUMBER}"
+
       - name: Test
         run: uv run pytest
 
       - name: Build
         run: uv build
 
-      - name: Publish
+      - name: Publish to PyPI
+        if: github.event_name == 'release'
         run: uv publish
+
+      - name: Publish to TestPyPI
+        if: github.event_name != 'release'
+        run: uv publish --publish-url https://test.pypi.org/legacy/
