@@ -20,8 +20,10 @@ Shared tools for post-processing GNSS data with [RTKLIB](https://www.rtklib.com/
 ## Install
 
 ```sh
-pip install git+https://github.com/franioli/gnsskit                # library
-pip install 'gnsskit[network] @ git+https://github.com/franioli/gnsskit'   # + network adjustment
+pip install gnsskit                  # library
+pip install "gnsskit[network]"       # + network adjustment (scipy, pyproj)
+pip install "gnsskit[network,plot]"  # + satellite visibility plots (matplotlib)
+pip install git+https://github.com/franioli/gnsskit   # development version
 ```
 
 `rnx2rtkp` is not installed by pip. Build the [demo5 fork](https://github.com/rtklibexplorer/RTKLIB) and put it on
@@ -37,4 +39,4 @@ pos_file = run_rnx2rtkp(rover_obs, base_obs, [nav], config, "out.pos")
 pos = read_pos(pos_file)
 ```
 
-See [example/](example/) for complete static, kinematic and network adjustment examples.
+See [example/](https://github.com/franioli/gnsskit/tree/main/example) for complete static, kinematic and network adjustment examples.
