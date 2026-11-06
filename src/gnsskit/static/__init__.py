@@ -6,7 +6,6 @@ because it needs the `network` extra (scipy, pyproj).
 
 from .baseline import (
     BaselineResult,
-    baseline_from_solution,
     baselines_to_df,
     df_to_baselines,
     extract_baseline,
@@ -19,7 +18,6 @@ from .solve import solve_static
 
 __all__ = [
     "BaselineResult",
-    "baseline_from_solution",
     "baselines_to_df",
     "df_to_baselines",
     "extract_baseline",

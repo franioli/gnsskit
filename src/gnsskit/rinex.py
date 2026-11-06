@@ -439,6 +439,11 @@ def signal_stats(obs: Path | str) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index(["system", "code"])
 
 
+# =============================================================================
+# Plots
+# =============================================================================
+
+
 def plot_visibility(
     obs_files: Sequence[Path | str],
     out: Path | str | None = None,

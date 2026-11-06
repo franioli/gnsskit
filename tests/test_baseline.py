@@ -6,7 +6,10 @@ import pytest
 
 from gnsskit.rtklib.pos import pos_covariance, read_pos
 from gnsskit.static.baseline import (
-    BaselineResult, baseline_from_solution, extract_baseline, read_baselines, write_baselines,
+    BaselineResult,
+    extract_baseline,
+    read_baselines,
+    write_baselines,
 )  # fmt: skip
 
 from conftest import DATA, llh_header, llh_line
@@ -14,7 +17,7 @@ from conftest import DATA, llh_header, llh_line
 
 def test_pos_covariance_restores_signs() -> None:
     cov = np.array([[4.0, -1.0, 0.5], [-1.0, 9.0, 0.0], [0.5, 0.0, 1.0]]) * 1e-6
-    sgn = lambda c: np.sign(c) * np.sqrt(abs(c))  # noqa: E731  RTKLIB's printing
+    sgn = lambda c: np.sign(c) * np.sqrt(abs(c))
     row = dict(zip(["sdx", "sdy", "sdz", "sdxy", "sdyz", "sdzx"],
                    [*np.sqrt(np.diag(cov)), sgn(cov[0, 1]), sgn(cov[1, 2]), sgn(cov[2, 0])]))  # fmt: skip
     assert np.allclose(pos_covariance(row), cov)
@@ -32,13 +35,6 @@ def test_extract_baseline_takes_last_epoch() -> None:
     assert b.n_epochs == len(pos) > 1
     assert b.fix_pct == pytest.approx(100 * (pos.Q == 1).mean())
     assert b.ratio_median == pytest.approx(pos.ratio.median())
-
-
-def test_baseline_from_solution() -> None:
-    sol = {"t": pd.Timestamp("2026-11-04 10:00"), "x": 11.0, "y": 22.0, "z": 33.0, "Q": 2, "ns": 9,
-           "ratio": 0.0, "sdx": 0.01, "sdy": 0.02, "sdz": 0.03, "sdxy": 0.0, "sdyz": 0.0, "sdzx": 0.0}  # fmt: skip
-    b = baseline_from_solution(sol, np.array([10.0, 20.0, 30.0]), "R", "B")
-    assert np.allclose(b.dxyz, [1, 2, 3]) and b.cov[2, 2] == pytest.approx(9e-4) and not b.is_good()
 
 
 def test_extract_baseline_errors(tmp_path: Path) -> None:

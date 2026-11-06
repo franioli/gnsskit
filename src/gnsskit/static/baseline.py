@@ -2,14 +2,14 @@
 
 A baseline is the ECEF vector base -> rover with its 3x3 covariance and the quality
 indicators of the solution. `BaselineResult` is independent of RTKLIB: the RTKLIB-specific
-part is only how it is built (`baseline_from_solution`, `extract_baseline`) and computed
+part is only how it is built (`extract_baseline`) and computed
 (`process_baseline`), so other solvers can produce the same objects for `gnsskit.static.network`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -134,57 +134,20 @@ def _timestamp(value: Any) -> pd.Timestamp:
 
 
 # =============================================================================
-# Construction from RTKLIB solutions
+# Processing baselines with rnx2rtkp
 # =============================================================================
-
-
-def baseline_from_solution(
-    sol: pd.Series | Mapping[str, Any],
-    base_xyz: Sequence[float] | np.ndarray,
-    rover: str,
-    base: str,
-    session: str = "",
-    pos_file: Path | str | None = None,
-) -> BaselineResult:
-    """Baseline from one epoch of an xyz `read_pos` table and the base position.
-
-    Args:
-        sol: One epoch (row) of an xyz `read_pos` table.
-        base_xyz: (3,) ECEF base coordinates [m] used in the processing.
-        rover: Rover point name.
-        base: Base point name.
-        session: Session label stored in the result.
-        pos_file: Source .pos file, stored for reference.
-
-    Returns:
-        The baseline rover - base. Its covariance is the formal covariance of the rover
-        solution, which is also that of the baseline because RTKLIB holds the base fixed;
-        it is optimistic (see `gnsskit.static.network.K_S`).
-    """
-    xyz = np.array([sol[c] for c in POS_COORD_COLS["xyz"]], dtype=float)
-    return BaselineResult(
-        rover=rover,
-        base=base,
-        session=session,
-        epoch=_timestamp(sol["t"]),
-        dxyz=xyz - np.asarray(base_xyz, dtype=float),
-        cov=pos_covariance(sol, "xyz"),
-        q=int(sol["Q"]),
-        ns=int(sol["ns"]),
-        ratio=float(sol["ratio"]),
-        pos_file=Path(pos_file) if pos_file is not None else None,
-    )
 
 
 def extract_baseline(
     pos_file: Path | str, rover: str, base: str, session: str = ""
 ) -> BaselineResult | None:
-    """Final-epoch baseline from an xyz .pos file, with statistics over all its epochs.
+    """Baseline from an xyz .pos file: final epoch, with statistics over all its epochs.
 
     The vector is the last solution minus the base position in the `% ref pos` header, so the
-    file needs `out-solformat=xyz` and `out-outhead=on`. The ratio of the last epoch alone is
-    a noisy indicator: `fix_pct` and `ratio_median` describe the whole session, if the file
-    has all the epochs (RTKLIB out-solstatic=all, the default).
+    file needs `out-solformat=xyz` and `out-outhead=on`. The covariance is the formal one of
+    the rover solution (the base is held fixed), optimistic: see `network.K_S`. The ratio of
+    the last epoch alone is a noisy indicator: `fix_pct` and `ratio_median` describe the
+    whole session, if the file has all the epochs (RTKLIB out-solstatic=all, the default).
 
     Args:
         pos_file: RTKLIB .pos file.
@@ -201,22 +164,30 @@ def extract_baseline(
     pos = read_pos(pos_file)
     if pos.attrs["format"] != "xyz":
         raise ValueError(f"{pos_file}: need out-solformat=xyz to extract a baseline")
+
     if pos.empty:
         return None
-    bl = baseline_from_solution(
-        pos.iloc[-1], read_ref_pos(pos_file), rover, base, session, pos_file
-    )
-    return replace(
-        bl,
+
+    # The last epoch is the final solution, but the statistics are over all epochs.
+    last = pos.iloc[-1]
+    dxyz = last[POS_COORD_COLS["xyz"]].to_numpy(float) - read_ref_pos(pos_file)
+    cov = pos_covariance(last, "xyz")  # formal covariance of the rover solution
+
+    return BaselineResult(
+        rover=rover,
+        base=base,
+        session=session,
+        epoch=_timestamp(last["t"]),
+        dxyz=dxyz,
+        cov=cov,
+        q=int(last["Q"]),
+        ns=int(last["ns"]),
+        ratio=float(last["ratio"]),
+        pos_file=Path(pos_file),
         n_epochs=len(pos),
         fix_pct=100.0 * float((pos["Q"] == 1).mean()),
         ratio_median=float(pos["ratio"].median()),
     )
-
-
-# =============================================================================
-# Processing with rnx2rtkp
-# =============================================================================
 
 
 def process_baseline(
